@@ -41,7 +41,15 @@ class Adadelta(object):
             grads = []
             square_avgs = []
             acc_deltas = []
-            lr, rho, eps, weight_decay = get_lr(self.lr), group['rho'], group['eps'], group['weight_decay']
+            lr, rho, eps, weight_decay, foreach, maximize, differentiable = (
+                get_lr(self.lr),
+                group['rho'],
+                group['eps'],
+                group['weight_decay'],
+                group["foreach"],
+                group["maximize"],
+                group["differentiable"],
+            )
 
             for p in group['params']:
                 if p.grad is None:
@@ -64,14 +72,19 @@ class Adadelta(object):
 
                 state['step'] += 1
 
-            F.adadelta(params_with_grad,
-                       grads,
-                       square_avgs,
-                       acc_deltas,
-                       lr=lr,
-                       rho=rho,
-                       eps=eps,
-                       weight_decay=weight_decay)
+            F.adadelta(
+                    params_with_grad,
+                    grads,
+                    square_avgs,
+                    acc_deltas,
+                    lr=lr,
+                    rho=rho,
+                    eps=eps,
+                    weight_decay=weight_decay,
+                    foreach=foreach,
+                    maximize=maximize,
+                    differentiable=differentiable,
+            )
 
         return loss
 
@@ -133,19 +146,21 @@ class Adagrad(object):
                     grads.append(p.grad)
                     state = self.optimizer_adagrad.state[p]
                     state_sums.append(state['sum'])
-                    # update the steps for each param group update
-                    state['step'] += 1
-                    # record the step after step update
                     state_steps.append(state['step'])
 
-            F.adagrad(params_with_grad,
-                      grads,
-                      state_sums,
-                      state_steps,
-                      lr=get_lr(self.lr),
-                      weight_decay=group['weight_decay'],
-                      lr_decay=group['lr_decay'],
-                      eps=group['eps'])
+            F.adagrad(
+                params_with_grad,
+                grads,
+                state_sums,
+                state_steps,
+                lr=get_lr(self.lr),
+                weight_decay=group['weight_decay'],
+                lr_decay=group['lr_decay'],
+                eps=group['eps'],
+                foreach=group["foreach"],
+                maximize=group["maximize"],
+                differentiable=group["differentiable"]
+            )
 
         return loss
 
@@ -327,6 +342,9 @@ class Adamax(object):
             eps = group['eps']
             lr = get_lr(self.lr)
             weight_decay = group['weight_decay']
+            foreach = group["foreach"]
+            maximize = group["maximize"]
+            differentiable = group["differentiable"]
 
             for p in group['params']:
                 if p.grad is None:
@@ -340,26 +358,29 @@ class Adamax(object):
 
                 # State initialization
                 if len(state) == 0:
-                    state['step'] = 0
+                    state['step'] = torch.tensor(0.0)
                     state['exp_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
                     state['exp_inf'] = torch.zeros_like(p, memory_format=torch.preserve_format)
 
                 exp_avgs.append(state['exp_avg'])
                 exp_infs.append(state['exp_inf'])
-
-                state['step'] += 1
                 state_steps.append(state['step'])
 
-            F.adamax(params_with_grad,
-                     grads,
-                     exp_avgs,
-                     exp_infs,
-                     state_steps,
-                     eps=eps,
-                     beta1=beta1,
-                     beta2=beta2,
-                     lr=lr,
-                     weight_decay=weight_decay)
+            F.adamax(
+                params_with_grad,
+                grads,
+                exp_avgs,
+                exp_infs,
+                state_steps,
+                eps=eps,
+                beta1=beta1,
+                beta2=beta2,
+                lr=lr,
+                weight_decay=weight_decay,
+                foreach=foreach,
+                maximize=maximize,
+                differentiable=differentiable
+            )
 
         return loss
 
@@ -543,6 +564,8 @@ class SGD(object):
             momentum = group['momentum']
             dampening = group['dampening']
             nesterov = group['nesterov']
+            maximize = group['maximize']
+            foreach = group['foreach']
             lr = get_lr(self.lr)
 
             for p in group['params']:
@@ -556,14 +579,18 @@ class SGD(object):
                     else:
                         momentum_buffer_list.append(state['momentum_buffer'])
 
-            F.sgd(params_with_grad,
-                  d_p_list,
-                  momentum_buffer_list,
-                  weight_decay=weight_decay,
-                  momentum=momentum,
-                  lr=lr,
-                  dampening=dampening,
-                  nesterov=nesterov)
+            F.sgd(
+                params_with_grad,
+                d_p_list,
+                momentum_buffer_list,
+                weight_decay=weight_decay,
+                momentum=momentum,
+                lr=lr,
+                dampening=dampening,
+                nesterov=nesterov,
+                maximize= maximize,
+                foreach=foreach
+            )
 
             # update momentum_buffers in state
             for p, momentum_buffer in zip(params_with_grad, momentum_buffer_list):
@@ -627,6 +654,8 @@ class Momentum(object):
             momentum = group['momentum']
             dampening = group['dampening']
             nesterov = group['nesterov']
+            maximize = group['maximize']
+            foreach = group['foreach']
             lr = get_lr(self.lr)
 
             for p in group['params']:
@@ -640,14 +669,18 @@ class Momentum(object):
                     else:
                         momentum_buffer_list.append(state['momentum_buffer'])
 
-            F.sgd(params_with_grad,
-                  d_p_list,
-                  momentum_buffer_list,
-                  weight_decay=weight_decay,
-                  momentum=momentum,
-                  lr=lr,
-                  dampening=dampening,
-                  nesterov=nesterov)
+            F.sgd(
+                params_with_grad,
+                d_p_list,
+                momentum_buffer_list,
+                weight_decay=weight_decay,
+                momentum=momentum,
+                lr=lr,
+                dampening=dampening,
+                nesterov=nesterov,
+                maximize= maximize,
+                foreach=foreach
+            )
 
             # update momentum_buffers in state
             for p, momentum_buffer in zip(params_with_grad, momentum_buffer_list):
