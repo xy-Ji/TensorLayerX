@@ -248,7 +248,8 @@ class Adam(object):
                    beta2=beta2,
                    lr=get_lr(self.lr),
                    weight_decay=group['weight_decay'],
-                   eps=group['eps'])
+                   eps=group['eps'],
+                   maximize=group['maximize'])
         return loss
 
     def gradient(self, loss, weights=None, return_grad=True):

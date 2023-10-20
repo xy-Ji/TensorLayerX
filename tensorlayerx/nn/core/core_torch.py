@@ -125,17 +125,18 @@ class Module(T_Module):
     # TODO RNN enabled after repair
     __call__: Callable[..., Any] = _call_impl_tlx
 
-    def _named_members(self, get_members_fn, prefix='', recurse=True):
+    def _named_members(self, get_members_fn, prefix='', recurse=True, remove_duplicate=True):
         r"""Helper method for yielding various names + members of modules."""
         memo = set()
-        modules = self.named_modules(prefix=prefix) if recurse else [(prefix, self)]
+        modules = self.named_modules(prefix=prefix, remove_duplicate=remove_duplicate) if recurse else [(prefix, self)]
         for module_prefix, module in modules:
             members = get_members_fn(module)
             for k, v in members:
                 if v is None or v in memo:
                     continue
-                memo.add(v)
-                name = module.name + '/' + k
+                if remove_duplicate:
+                    memo.add(v)
+                name = module_prefix + ('.' if module_prefix else '') + k
                 yield name, v
 
 
@@ -505,9 +506,6 @@ class ModuleList(Module):
 
         if _valid_module(layer):
             self._modules[str(len(self))] = layer
-
-    def forward(self, *inputs):
-        raise NotImplementedError
 
 
 class ModuleDict(Module):
