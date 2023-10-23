@@ -42,5 +42,6 @@ backend_v = {
 }
 
 if BACKEND_VERSION != backend_v[BACKEND]:
-    warnings.warn("The version of the backend you have installed does not match the specified backend version "
-                  "and may not work, please install version {} {}.".format(BACKEND, backend_v[BACKEND]))
+    pass
+    # warnings.warn("The version of the backend you have installed does not match the specified backend version "
+    #               "and may not work, please install version {} {}.".format(BACKEND, backend_v[BACKEND]))

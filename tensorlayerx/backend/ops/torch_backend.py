@@ -501,7 +501,7 @@ class ReduceSum(object):
 
     def __call__(self, input):
         if self.axis is not None:
-            return torch.sum(input=input, dim=self.axis)
+            return torch.sum(input=input, dim=self.axis, keepdim=self.keepdims)
         else:
             return torch.sum(input=input)
 
@@ -1263,7 +1263,7 @@ def divide(x, y):
 
 def identity(x):
 
-    raise NotImplementedError
+    return x.clone()
 
 
 class BatchToSpace(object):

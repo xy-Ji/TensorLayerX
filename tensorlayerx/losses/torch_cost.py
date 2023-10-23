@@ -552,7 +552,7 @@ def huber_loss(
 
     """
 
-    return torch.nn.functional.huber_loss(output, target, reduction='mean' if is_mean else 'sum', delta=delta)
+    return F.huber_loss(output, target, reduction='mean' if is_mean else 'sum', delta=delta)
 
 
 def _cast(a, threshold, flag=False):
@@ -569,4 +569,4 @@ def _cast(a, threshold, flag=False):
 
 def L1Loss(input, target, reduction='mean'):
 
-    return torch.nn.functional.l1_loss(input, target, reduction=reduction)
+    return F.l1_loss(input, target, reduction=reduction)

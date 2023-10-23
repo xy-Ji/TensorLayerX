@@ -1077,7 +1077,7 @@ class Parameter(Module):
 
     """
 
-    def __new__(self, data=None, name=None):
+    def __new__(self, data=None, requires_grad=True, name=None):
         instance = super().__new__(self)
         if name is None:
             prefix = 'parameter'
@@ -1101,10 +1101,10 @@ class Parameter(Module):
         if data is None:
             return instance
         else:
-            return instance(data, name)
+            return instance(data, requires_grad, name)
 
-    def __call__(self, data=None, name=None, **kwargs):
-        return tf.Variable(initial_value=data, name=name)
+    def __call__(self, data=None, trainable=True, name=None):
+        return tf.Variable(initial_value=data, trainable=trainable, name=name)
 
 
 class ParameterList(Module):

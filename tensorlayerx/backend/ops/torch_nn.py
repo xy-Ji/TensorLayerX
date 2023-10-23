@@ -294,6 +294,22 @@ class Softplus(object):
     def __call__(self, x):
         return F.softplus(x)
 
+def softplus(x):
+    """
+    Compute the Softplus activation function.
+
+    Parameters
+    ----------
+    x : tensor
+        representing preactivation values. Must be one of the following types:
+        float16, float32, float64, int32, int64.
+
+    Returns
+    -------
+        The activation value.
+    """
+
+    return F.softplus(x)
 
 class Tanh(object):
 
@@ -303,6 +319,22 @@ class Tanh(object):
     def __call__(self, x):
         return F.tanh(x)
 
+def tanh(x):
+    """
+    Compute the Tanh activation function.
+
+    Parameters
+    ----------
+    x : tensor
+        representing preactivation values. Must be one of the following types:
+        float16, float32, float64, int32, int64.
+
+    Returns
+    -------
+        The activation value.
+    """
+
+    return F.tanh(x)
 
 class Sigmoid(object):
 
@@ -1716,13 +1748,16 @@ class BatchNorm(object):
         if self.data_format == 'channels_last':
             inputs = nhwc_to_nchw(inputs)
 
-        out = torch.nn.functional.batch_norm(inputs,
-                                             running_mean=self.moving_mean,
-                                             running_var=self.moving_var,
-                                             weight=self.gamma,
-                                             bias=self.beta,
-                                             training=self.is_train,
-                                             momentum=self.decay)
+        out = F.batch_norm(
+                        inputs,
+                        running_mean=self.moving_mean,
+                        running_var=self.moving_var,
+                        weight=self.gamma,
+                        bias=self.beta,
+                        training=self.is_train,
+                        momentum=self.decay,
+                        eps=self.epsilon
+                )
         if self.data_format == 'channels_last':
             out = nchw_to_nhwc(out)
         return out
@@ -2387,11 +2422,11 @@ def prelu(input, weight, data_format):
 
 def hardsigmoid(input):
 
-    return torch.nn.functional.hardsigmoid(input)
+    return F.hardsigmoid(input)
 
 def hardswish(input):
 
-    return torch.nn.functional.hardswish(input)
+    return F.hardswish(input)
 
 def swish(input):
 
@@ -2399,8 +2434,8 @@ def swish(input):
 
 def linear(input, weight, bias = None):
 
-    return torch.nn.functional.linear(input, weight, bias)
+    return F.linear(input, weight, bias)
 
 def unfold(input, kernel_size, dilation = 1, padding = 0, stride = 1):
 
-    return torch.nn.functional.unfold(input, kernel_size, stride=stride, padding=padding, dilation=dilation)
+    return F.unfold(input, kernel_size, stride=stride, padding=padding, dilation=dilation)

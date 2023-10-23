@@ -203,6 +203,10 @@ class Adam(object):
         self.init_optim = False
         self.weight_decay = weight_decay
         self.grad_clip = grad_clip
+        self.defaults = dict(lr=lr, beta_1=beta_1, beta_2=beta_2, eps=eps,
+                        weight_decay=weight_decay, amsgrad=False,
+                        maximize=False, foreach=None, capturable=False,
+                        differentiable=False, fused=None)
 
     @torch.no_grad()
     def apply_gradients(self, grads_and_vars=None, closure=None):
@@ -290,6 +294,8 @@ class Adam(object):
                 params=weights, lr=get_lr(self.lr), betas=(self.beta_1, self.beta_2), eps=self.eps,
                 weight_decay=self.weight_decay
             )
+            for name, default in self.defaults.items():
+                self.optimizer_adam.param_group.setdefault(name, default)
             self.init_optim = True
         self.optimizer_adam.zero_grad()
         loss.backward()
