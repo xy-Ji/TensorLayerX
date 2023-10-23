@@ -106,8 +106,8 @@ class Adadelta(object):
             self.optimizer_adadelta = optimizer.Adadelta(
                 params=weights, lr=get_lr(self.lr), rho=self.rho, eps=self.eps, weight_decay=self.weight_decay
             )
-            for param_group in self.optimizer_adadelta.param_groups:
-                add_param_group(cast(dict, param_group), self.defaults, self.optimizer_adadelta)
+            for index in range(len(self.optimizer_adadelta.param_groups)):
+                update_param_group(index, self.defaults, self.optimizer_adadelta)
             self.init_optim = True
         self.optimizer_adadelta.zero_grad()
         loss.backward()
@@ -195,8 +195,8 @@ class Adagrad(object):
                 params=weights, lr=get_lr(self.lr), lr_decay=self.initial_accumulator_value,
                 weight_decay=self.weight_decay
             )
-            for param_group in self.optimizer_adagrad.param_groups:
-                add_param_group(cast(dict, param_group), self.defaults, self.optimizer_adagrad)
+            for index in range(len(self.optimizer_adagrad.param_groups)):
+                update_param_group(index, self.defaults, self.optimizer_adagrad)
             self.init_optim = True
         self.optimizer_adagrad.zero_grad()
         loss.backward()
@@ -228,7 +228,7 @@ class Adam(object):
         self.init_optim = False
         self.weight_decay = weight_decay
         self.grad_clip = grad_clip
-        self.defaults = dict(lr=lr, beta_1=beta_1, beta_2=beta_2, eps=eps,
+        self.defaults = dict(lr=lr, betas=(beta_1, beta_2), eps=eps,
                         weight_decay=weight_decay, amsgrad=False,
                         maximize=False, foreach=None, capturable=False,
                         differentiable=False, fused=None)
@@ -319,8 +319,8 @@ class Adam(object):
                 params=weights, lr=get_lr(self.lr), betas=(self.beta_1, self.beta_2), eps=self.eps,
                 weight_decay=self.weight_decay
             )
-            for param_group in self.optimizer_adam.param_groups:
-                add_param_group(cast(dict, param_group), self.defaults, self.optimizer_adam)
+            for index in range(len(self.optimizer_adam.param_groups)):
+                update_param_group(index, self.defaults, self.optimizer_adam)
             self.init_optim = True
         self.optimizer_adam.zero_grad()
         loss.backward()
@@ -354,8 +354,7 @@ class Adamax(object):
         self.grad_clip = grad_clip
         self.defaults = dict(
             lr=lr,
-            beta_1=beta_1,
-            beta_2=beta_2,
+            betas=(beta_1, beta_2),
             eps=eps,
             weight_decay=weight_decay,
             foreach=None,
@@ -433,8 +432,8 @@ class Adamax(object):
                 params=weights, lr=get_lr(self.lr), betas=(self.beta_1, self.beta_2), eps=self.eps,
                 weight_decay=self.weight_decay
             )
-            for param_group in self.optimizer_adamax.param_groups:
-                add_param_group(cast(dict, param_group), self.defaults, self.optimizer_adamax)
+            for index in range(len(self.optimizer_adamax.param_groups)):
+                update_param_group(index, self.defaults, self.optimizer_adamax)
             self.init_optim = True
         self.optimizer_adamax.zero_grad()
         loss.backward()
@@ -571,8 +570,8 @@ class RMSprop(object):
                 params=weights, lr=get_lr(self.lr), alpha=self.rho, eps=self.eps, momentum=self.momentum,
                 centered=self.centered, weight_decay=self.weight_decay
             )
-            for param_group in self.optimizer_rmsprop.param_groups:
-                add_param_group(cast(dict, param_group), self.defaults, self.optimizer_rmsprop)
+            for index in range(len(self.optimizer_rmsprop.param_groups)):
+                update_param_group(index, self.defaults, self.optimizer_rmsprop)
             self.init_optim = True
         self.optimizer_rmsprop.zero_grad()
         loss.backward()
@@ -671,8 +670,8 @@ class SGD(object):
             self.optimizer_sgd = optimizer.SGD(
                 params=weights, lr=get_lr(self.lr), momentum=self.momentum, weight_decay=self.weight_decay
             )
-            for param_group in self.optimizer_sgd.param_groups:
-                add_param_group(cast(dict, param_group), self.defaults, self.optimizer_sgd)
+            for index in range(len(self.optimizer_sgd.param_groups)):
+                update_param_group(index, self.defaults, self.optimizer_sgd)
             self.init_optim = True
         self.optimizer_sgd.zero_grad()
         loss.backward()
@@ -773,8 +772,8 @@ class Momentum(object):
             self.optimizer_momentum = optimizer.SGD(
                 params=weights, lr=get_lr(self.lr), momentum=self.momentum, weight_decay=self.weight_decay, nesterov=self.nesterov
             )
-            for param_group in self.optimizer_momentum.param_groups:
-                add_param_group(cast(dict, param_group), self.defaults, self.optimizer_momentum)
+            for index in range(len(self.optimizer_momentum.param_groups)):
+                update_param_group(index, self.defaults, self.optimizer_momentum)
             self.init_optim = True
         self.optimizer_momentum.zero_grad()
         loss.backward()
@@ -807,49 +806,11 @@ def get_lr(lr):
         return lr()
     return lr
 
-def add_param_group(param_group, defaults, optimizer):
-    r"""Add a param group to the :class:`Optimizer` s `param_groups`.
+def update_param_group(index, defaults, optimizer):
 
-    This can be useful when fine tuning a pre-trained network as frozen layers can be made
-    trainable and added to the :class:`Optimizer` as training progresses.
+    param_group = optimizer.param_groups[index]
+    if not set(defaults.keys())==(set(param_group.keys())):
+        for name, default in defaults.items():
+            cast(dict, param_group).setdefault(name, default)
 
-    Args:
-        param_group (dict): Specifies what Tensors should be optimized along with group
-            specific optimization options.
-    """
-    if not isinstance(param_group, dict):
-        raise TypeError(f"param_group must be a dict, but got {type(param_group)}")
-
-    params = param_group['params']
-    if isinstance(params, torch.Tensor):
-        param_group['params'] = [params]
-    elif isinstance(params, set):
-        raise TypeError('optimizer parameters need to be organized in ordered collections, but '
-                        'the ordering of tensors in sets will change between runs. Please use a list instead.')
-    else:
-        param_group['params'] = list(params)
-
-    for param in param_group['params']:
-        if not isinstance(param, torch.Tensor):
-            raise TypeError("optimizer can only optimize Tensors, "
-                            "but one of the params is " + torch.typename(param))
-        if not defaults.get('differentiable', None) and not (param.is_leaf or param.retains_grad):
-            raise ValueError("can't optimize a non-leaf Tensor")
-
-    for name, default in defaults.items():
-        param_group.setdefault(name, default)
-
-    params = param_group['params']
-    if len(params) != len(set(params)):
-        warnings.warn("optimizer contains a parameter group with duplicate parameters; "
-                        "in future, this will cause an error; "
-                        "see github.com/pytorch/pytorch/issues/40967 for more information", stacklevel=3)
-
-    param_set = set()
-    for group in optimizer.param_groups:
-        param_set.update(set(group['params']))
-
-    if not param_set.isdisjoint(set(param_group['params'])):
-        raise ValueError("some parameters appear in more than one parameter group")
-
-    optimizer.param_groups.append(param_group)
+    optimizer.param_groups[index] = param_group
