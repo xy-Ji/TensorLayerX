@@ -159,6 +159,7 @@ class Adagrad(object):
                     grads.append(p.grad)
                     state = self.optimizer_adagrad.state[p]
                     state_sums.append(state['sum'])
+                    state['step'] += 1
                     state_steps.append(state['step'])
 
             adagrad_signature = inspect.signature(F.adagrad)
@@ -250,41 +251,41 @@ class Adam(object):
 
                     state = self.optimizer_adam.state[p]
 
-                capturable = group.get('capturable', False)
-                differentiable = group.get('differentiable', False)
-                foreach = group.get('foreach', False)
-                # Lazy state initialization
-                if len(state) == 0:
-                    # note(crcrpar): [special device hosting for step]
-                    # Deliberately host `step` on CPU if both capturable and fused are off.
-                    # This is because kernel launches are costly on CUDA and XLA.
-                    fused = group.get('fused', False)
-                    state['step'] = (
-                        torch.zeros((), dtype=torch.float, device=p.device)
-                        if capturable or fused
-                        else torch.tensor(0.)
-                    )
-                    # Exponential moving average of gradient values
-                    state['exp_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
-                    # Exponential moving average of squared gradient values
-                    state['exp_avg_sq'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                    capturable = group.get('capturable', False)
+                    differentiable = group.get('differentiable', False)
+                    foreach = group.get('foreach', None)
+                    # Lazy state initialization
+                    if len(state) == 0:
+                        # note(crcrpar): [special device hosting for step]
+                        # Deliberately host `step` on CPU if both capturable and fused are off.
+                        # This is because kernel launches are costly on CUDA and XLA.
+                        fused = group.get('fused', None)
+                        state['step'] = (
+                            torch.zeros((), dtype=torch.float, device=p.device)
+                            if capturable or fused
+                            else torch.tensor(0.)
+                        )
+                        # Exponential moving average of gradient values
+                        state['exp_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                        # Exponential moving average of squared gradient values
+                        state['exp_avg_sq'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                        if group['amsgrad']:
+                            # Maintains max of all exp. moving avg. of sq. grad. values
+                            state['max_exp_avg_sq'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+
+                    exp_avgs.append(state['exp_avg'])
+                    exp_avg_sqs.append(state['exp_avg_sq'])
+
                     if group['amsgrad']:
-                        # Maintains max of all exp. moving avg. of sq. grad. values
-                        state['max_exp_avg_sq'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                        max_exp_avg_sqs.append(state['max_exp_avg_sq'])
+                    if differentiable and state['step'].requires_grad:
+                        raise RuntimeError('`requires_grad` is not supported for `step` in differentiable mode')
 
-                exp_avgs.append(state['exp_avg'])
-                exp_avg_sqs.append(state['exp_avg_sq'])
-
-                if group['amsgrad']:
-                    max_exp_avg_sqs.append(state['max_exp_avg_sq'])
-                if differentiable and state['step'].requires_grad:
-                    raise RuntimeError('`requires_grad` is not supported for `step` in differentiable mode')
-
-                # Foreach without capturable does not support a tensor lr
-                if foreach and torch.is_tensor(group['lr']) and not group['capturable']:
-                    raise RuntimeError('lr as a Tensor is not supported for capturable=False and foreach=True')
-
-                state_steps.append(state['step'])
+                    # Foreach without capturable does not support a tensor lr
+                    if foreach and torch.is_tensor(group['lr']) and not group['capturable']:
+                        raise RuntimeError('lr as a Tensor is not supported for capturable=False and foreach=True')
+                    state['step'] += 1
+                    state_steps.append(state['step'])
 
             adam_signature = inspect.signature(F.adam)
             params = adam_signature.parameters
@@ -413,6 +414,7 @@ class Adamax(object):
 
             exp_avgs.append(state["exp_avg"])
             exp_infs.append(state["exp_inf"])
+            state['step'] += 1
             state_steps.append(state["step"])
 
     def gradient(self, loss, weights=None, return_grad=True):
