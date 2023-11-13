@@ -2,12 +2,13 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import absolute_import, division, print_function
+import torch
+import warnings
+import inspect
 import torch.optim as optimizer
 from torch.optim import _functional as F
-import torch
-from tensorlayerx.optimizers.lr import LRScheduler
-import warnings
 from typing import cast
+from tensorlayerx.optimizers.lr import LRScheduler
 
 __all__ = ['Adadelta', 'Adagrad', 'Adam', 'Adamax', 'Ftrl', 'Nadam', 'RMSprop', 'SGD', 'Momentum', 'Lamb', 'LARS']
 
@@ -28,15 +29,6 @@ class Adadelta(object):
         self.init_optim = False
         self.weight_decay = weight_decay
         self.grad_clip = grad_clip
-        self.defaults = dict(
-            lr=lr,
-            rho=rho,
-            eps=eps,
-            weight_decay=weight_decay,
-            maximize=False,
-            foreach=None,
-            differentiable=False,
-        )
 
     @torch.no_grad()
     def apply_gradients(self, grads_and_vars=None, closure=None):
@@ -52,15 +44,6 @@ class Adadelta(object):
             grads = []
             square_avgs = []
             acc_deltas = []
-            lr, rho, eps, weight_decay, foreach, maximize, differentiable = (
-                get_lr(self.lr),
-                group['rho'],
-                group['eps'],
-                group['weight_decay'],
-                group["foreach"],
-                group["maximize"],
-                group["differentiable"],
-            )
 
             for p in group['params']:
                 if p.grad is None:
@@ -83,19 +66,24 @@ class Adadelta(object):
 
                 state['step'] += 1
 
-            F.adadelta(
-                    params_with_grad,
-                    grads,
-                    square_avgs,
-                    acc_deltas,
-                    lr=lr,
-                    rho=rho,
-                    eps=eps,
-                    weight_decay=weight_decay,
-                    foreach=foreach,
-                    maximize=maximize,
-                    differentiable=differentiable,
-            )
+            adadelta_signature = inspect.signature(F.adadelta)
+            params = adadelta_signature.parameters
+
+            adadelta_args = {
+                'params': params_with_grad,
+                'grads': grads,
+                'square_avgs': square_avgs,
+                'acc_deltas': acc_deltas,
+                'lr': get_lr(self.lr),
+                'rho': group['rho'],
+                'eps': group['eps'],
+                'weight_decay': group['weight_decay']
+            }
+            for param in ['maximize', 'foreach', 'differentiable']:
+                if param in params:
+                    adadelta_args[param] = group[param]
+
+            F.adadelta(**adadelta_args)
 
         return loss
 
@@ -106,8 +94,6 @@ class Adadelta(object):
             self.optimizer_adadelta = optimizer.Adadelta(
                 params=weights, lr=get_lr(self.lr), rho=self.rho, eps=self.eps, weight_decay=self.weight_decay
             )
-            for index in range(len(self.optimizer_adadelta.param_groups)):
-                update_param_group(index, self.defaults, self.optimizer_adadelta)
             self.init_optim = True
         self.optimizer_adadelta.zero_grad()
         loss.backward()
@@ -137,16 +123,20 @@ class Adagrad(object):
         self.init_optim = False
         self.weight_decay = weight_decay
         self.grad_clip = grad_clip
-        self.defaults = dict(
-            lr=lr,
-            lr_decay=0,
-            eps=eps,
-            weight_decay=weight_decay,
-            initial_accumulator_value=initial_accumulator_value,
-            foreach=None,
-            maximize=False,
-            differentiable=False,
-        )
+
+    def _init_group(self, group, params_with_grad, grads, state_sums, state_steps):
+        has_sparse_grad = False
+        for p in group["params"]:
+            if p.grad is not None:
+                if p.grad.is_sparse:
+                    has_sparse_grad = True
+                params_with_grad.append(p)
+                grads.append(p.grad)
+                state = self.state[p]
+                state_sums.append(state["sum"])
+                state_steps.append(state["step"])
+
+        return has_sparse_grad
 
     @torch.no_grad()
     def apply_gradients(self, grads_and_vars=None, closure=None):
@@ -171,19 +161,25 @@ class Adagrad(object):
                     state_sums.append(state['sum'])
                     state_steps.append(state['step'])
 
-            F.adagrad(
-                params_with_grad,
-                grads,
-                state_sums,
-                state_steps,
-                lr=get_lr(self.lr),
-                weight_decay=group['weight_decay'],
-                lr_decay=group['lr_decay'],
-                eps=group['eps'],
-                foreach=group["foreach"],
-                maximize=group["maximize"],
-                differentiable=group["differentiable"]
-            )
+            adagrad_signature = inspect.signature(F.adagrad)
+            params = adagrad_signature.parameters
+
+            adagrad_args = {
+                'params': params_with_grad,
+                'grads': grads,
+                'state_sums': state_sums,
+                'state_steps': state_steps,
+                'lr': get_lr(self.lr),
+                'weight_decay': group['weight_decay'],
+                'eps': group['eps']
+            }
+            for param in ['maximize', 'foreach', 'differentiable']:
+                if param in params:
+                    adagrad_args[param] = group[param]
+
+            has_sparse_grad = self._init_group(group, params_with_grad, grads, state_sums, state_steps)
+            adagrad_args['has_sparse_grad'] = has_sparse_grad
+            F.adagrad(**adagrad_args)
 
         return loss
 
@@ -195,8 +191,6 @@ class Adagrad(object):
                 params=weights, lr=get_lr(self.lr), lr_decay=self.initial_accumulator_value,
                 weight_decay=self.weight_decay
             )
-            for index in range(len(self.optimizer_adagrad.param_groups)):
-                update_param_group(index, self.defaults, self.optimizer_adagrad)
             self.init_optim = True
         self.optimizer_adagrad.zero_grad()
         loss.backward()
@@ -228,10 +222,6 @@ class Adam(object):
         self.init_optim = False
         self.weight_decay = weight_decay
         self.grad_clip = grad_clip
-        self.defaults = dict(lr=lr, betas=(beta_1, beta_2), eps=eps,
-                        weight_decay=weight_decay, amsgrad=False,
-                        maximize=False, foreach=None, capturable=False,
-                        differentiable=False, fused=None)
 
     @torch.no_grad()
     def apply_gradients(self, grads_and_vars=None, closure=None):
@@ -259,14 +249,19 @@ class Adam(object):
                     grads.append(p.grad)
 
                     state = self.optimizer_adam.state[p]
-                    # Lazy state initialization
+
+                capturable = group.get('capturable', False)
+                differentiable = group.get('differentiable', False)
+                foreach = group.get('foreach', False)
+                # Lazy state initialization
                 if len(state) == 0:
                     # note(crcrpar): [special device hosting for step]
                     # Deliberately host `step` on CPU if both capturable and fused are off.
                     # This is because kernel launches are costly on CUDA and XLA.
+                    fused = group.get('fused', False)
                     state['step'] = (
                         torch.zeros((), dtype=torch.float, device=p.device)
-                        if group['capturable'] or group['fused']
+                        if capturable or fused
                         else torch.tensor(0.)
                     )
                     # Exponential moving average of gradient values
@@ -282,33 +277,37 @@ class Adam(object):
 
                 if group['amsgrad']:
                     max_exp_avg_sqs.append(state['max_exp_avg_sq'])
-                if group['differentiable'] and state['step'].requires_grad:
+                if differentiable and state['step'].requires_grad:
                     raise RuntimeError('`requires_grad` is not supported for `step` in differentiable mode')
 
                 # Foreach without capturable does not support a tensor lr
-                if group['foreach'] and torch.is_tensor(group['lr']) and not group['capturable']:
+                if foreach and torch.is_tensor(group['lr']) and not group['capturable']:
                     raise RuntimeError('lr as a Tensor is not supported for capturable=False and foreach=True')
 
                 state_steps.append(state['step'])
 
-            F.adam(params_with_grad,
-                    grads,
-                    exp_avgs,
-                    exp_avg_sqs,
-                    max_exp_avg_sqs,
-                    state_steps,
-                    amsgrad=group['amsgrad'],
-                    beta1=beta1,
-                    beta2=beta2,
-                    lr=get_lr(self.lr),
-                    weight_decay=group['weight_decay'],
-                    eps=group['eps'],
-                    maximize=group['maximize'],
-                    foreach=group['foreach'],
-                    capturable=group['capturable'],
-                    differentiable=group['differentiable'],
-                    fused=group['fused']
-                )
+            adam_signature = inspect.signature(F.adam)
+            params = adam_signature.parameters
+
+            adam_args = {
+                'params': params_with_grad,
+                'grads': grads,
+                'exp_avgs': exp_avgs,
+                'exp_avg_sqs': exp_avg_sqs,
+                'max_exp_avg_sqs': max_exp_avg_sqs,
+                'state_steps': state_steps,
+                'amsgrad': group['amsgrad'],
+                'beta1': beta1,
+                'beta2': beta2,
+                'lr': get_lr(self.lr),
+                'weight_decay': group['weight_decay'],
+                'eps': group['eps']
+            }
+            for param in ['maximize', 'foreach', 'capturable', 'differentiable', 'fused']:
+                if param in params:
+                    adam_args[param] = group[param]
+            F.adam(**adam_args)
+
         return loss
 
     def gradient(self, loss, weights=None, return_grad=True):
@@ -319,8 +318,6 @@ class Adam(object):
                 params=weights, lr=get_lr(self.lr), betas=(self.beta_1, self.beta_2), eps=self.eps,
                 weight_decay=self.weight_decay
             )
-            for index in range(len(self.optimizer_adam.param_groups)):
-                update_param_group(index, self.defaults, self.optimizer_adam)
             self.init_optim = True
         self.optimizer_adam.zero_grad()
         loss.backward()
@@ -352,15 +349,6 @@ class Adamax(object):
         self.init_optim = False
         self.weight_decay = weight_decay
         self.grad_clip = grad_clip
-        self.defaults = dict(
-            lr=lr,
-            betas=(beta_1, beta_2),
-            eps=eps,
-            weight_decay=weight_decay,
-            foreach=None,
-            maximize=False,
-            differentiable=False,
-        )
 
     @torch.no_grad()
     def apply_gradients(self, grads_and_vars=None, closure=None):
@@ -378,51 +366,54 @@ class Adamax(object):
             exp_infs = []
             state_steps = []
 
-            beta1, beta2 = group['betas']
-            eps = group['eps']
-            lr = get_lr(self.lr)
-            weight_decay = group['weight_decay']
-            foreach = group["foreach"]
-            maximize = group["maximize"]
-            differentiable = group["differentiable"]
+            self._init_group(group, params_with_grad, grads, exp_avgs, exp_infs, state_steps)
 
-            for p in group['params']:
-                if p.grad is None:
-                    continue
-                params_with_grad.append(p)
-                if p.grad.is_sparse:
-                    raise RuntimeError('Adamax does not support sparse gradients')
-                grads.append(p.grad)
+            adamax_signature = inspect.signature(F.adamax)
+            params = adamax_signature.parameters
 
-                state = self.optimizer_adamax.state[p]
-
-                # State initialization
-                if len(state) == 0:
-                    state['step'] = torch.tensor(0.0)
-                    state['exp_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
-                    state['exp_inf'] = torch.zeros_like(p, memory_format=torch.preserve_format)
-
-                exp_avgs.append(state['exp_avg'])
-                exp_infs.append(state['exp_inf'])
-                state_steps.append(state['step'])
-
-            F.adamax(
-                params_with_grad,
-                grads,
-                exp_avgs,
-                exp_infs,
-                state_steps,
-                eps=eps,
-                beta1=beta1,
-                beta2=beta2,
-                lr=lr,
-                weight_decay=weight_decay,
-                foreach=foreach,
-                maximize=maximize,
-                differentiable=differentiable
-            )
+            adamax_args = {
+                'params': params_with_grad,
+                'grads': grads,
+                'exp_avgs': exp_avgs,
+                'exp_infs': exp_infs,
+                'state_steps': state_steps,
+                'eps': group['eps'],
+                'beta1': group['betas'][0],
+                'beta2': group['betas'][1],
+                'lr': get_lr(self.lr),
+                'weight_decay': group['weight_decay']
+            }
+            for param in ['maximize', 'foreach', 'differentiable']:
+                if param in params:
+                    adamax_args[param] = group[param]
+            F.adam(**adamax_args)
 
         return loss
+
+    def _init_group(self, group, params_with_grad, grads, exp_avgs, exp_infs, state_steps):
+        for p in group["params"]:
+            if p.grad is None:
+                continue
+            params_with_grad.append(p)
+            if p.grad.is_sparse:
+                raise RuntimeError("Adamax does not support sparse gradients")
+            grads.append(p.grad)
+
+            state = self.state[p]
+
+            # State initialization
+            if len(state) == 0:
+                state["step"] = torch.tensor(0.0)
+                state["exp_avg"] = torch.zeros_like(
+                    p, memory_format=torch.preserve_format
+                )
+                state["exp_inf"] = torch.zeros_like(
+                    p, memory_format=torch.preserve_format
+                )
+
+            exp_avgs.append(state["exp_avg"])
+            exp_infs.append(state["exp_inf"])
+            state_steps.append(state["step"])
 
     def gradient(self, loss, weights=None, return_grad=True):
         if weights is None:
@@ -432,8 +423,6 @@ class Adamax(object):
                 params=weights, lr=get_lr(self.lr), betas=(self.beta_1, self.beta_2), eps=self.eps,
                 weight_decay=self.weight_decay
             )
-            for index in range(len(self.optimizer_adamax.param_groups)):
-                update_param_group(index, self.defaults, self.optimizer_adamax)
             self.init_optim = True
         self.optimizer_adamax.zero_grad()
         loss.backward()
@@ -491,17 +480,46 @@ class RMSprop(object):
         self.init_optim = False
         self.weight_decay = weight_decay
         self.grad_clip = grad_clip
-        self.defaults = dict(
-            lr=lr,
-            momentum=momentum,
-            alpha=rho,
-            eps=eps,
-            centered=centered,
-            weight_decay=weight_decay,
-            foreach=None,
-            maximize=False,
-            differentiable=False,
-        )
+
+    def _init_group(self, group, params_with_grad, grads, square_avgs, momentum_buffer_list, grad_avgs):
+        for p in group["params"]:
+            if p.grad is None:
+                continue
+            params_with_grad.append(p)
+
+            if p.grad.is_sparse:
+                raise RuntimeError("RMSprop does not support sparse gradients")
+            grads.append(p.grad)
+
+            state = self.state[p]
+
+            differentiable = group.get('differentiable', False)
+            # State initialization
+            if len(state) == 0:
+                state["step"] = 0
+                state["square_avg"] = torch.zeros_like(
+                    p, memory_format=torch.preserve_format
+                )
+                if group["momentum"] > 0:
+                    state["momentum_buffer"] = torch.zeros_like(
+                        p, memory_format=torch.preserve_format
+                    )
+                if group["centered"]:
+                    state["grad_avg"] = torch.zeros_like(
+                        p, memory_format=torch.preserve_format
+                    )
+            square_avgs.append(state["square_avg"])
+
+            if group["momentum"] > 0:
+                momentum_buffer_list.append(state["momentum_buffer"])
+            if group["centered"]:
+                grad_avgs.append(state["grad_avg"])
+
+            if differentiable and isinstance(state["step"], torch.Tensor):
+                raise RuntimeError("`step` can't be a tensor")
+
+            state["step"] += 1
+
     @torch.no_grad()
     def apply_gradients(self, grads_and_vars=None, closure=None):
         if not self.init_optim:
@@ -519,46 +537,28 @@ class RMSprop(object):
             grad_avgs = []
             momentum_buffer_list = []
 
-            for p in group['params']:
-                if p.grad is None:
-                    continue
-                params_with_grad.append(p)
+            self._init_group(group, params_with_grad, grads, square_avgs, momentum_buffer_list, grad_avgs)
 
-                if p.grad.is_sparse:
-                    raise RuntimeError('RMSprop does not support sparse gradients')
-                grads.append(p.grad)
+            rmsprop_signature = inspect.signature(F.rmsprop)
+            params = rmsprop_signature.parameters
 
-                state = self.optimizer_rmsprop.state[p]
-
-                # State initialization
-                if len(state) == 0:
-                    state['step'] = 0
-                    state['square_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
-                    if group['momentum'] > 0:
-                        state['momentum_buffer'] = torch.zeros_like(p, memory_format=torch.preserve_format)
-                    if group['centered']:
-                        state['grad_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
-
-                square_avgs.append(state['square_avg'])
-
-                if group['momentum'] > 0:
-                    momentum_buffer_list.append(state['momentum_buffer'])
-                if group['centered']:
-                    grad_avgs.append(state['grad_avg'])
-
-                state['step'] += 1
-
-            F.rmsprop(params_with_grad,
-                      grads,
-                      square_avgs,
-                      grad_avgs,
-                      momentum_buffer_list,
-                      lr=get_lr(self.lr),
-                      alpha=group['alpha'],
-                      eps=group['eps'],
-                      weight_decay=group['weight_decay'],
-                      momentum=group['momentum'],
-                      centered=group['centered'])
+            rmsprop_args = {
+                'params': params_with_grad,
+                'grads': grads,
+                'exp_avgs': square_avgs,
+                'grad_avgs': grad_avgs,
+                'momentum_buffer_list': momentum_buffer_list,
+                'lr': get_lr(self.lr),
+                'alpha': group["alpha"],
+                'eps': group['eps'],
+                'weight_decay': group['weight_decay'],
+                'momentum': group['momentum'],
+                'centered': group['centered']
+            }
+            for param in ['maximize', 'foreach', 'differentiable']:
+                if param in params:
+                    rmsprop_args[param] = group[param]
+            F.rmsprop(**rmsprop_args)
 
         return loss
 
@@ -570,8 +570,6 @@ class RMSprop(object):
                 params=weights, lr=get_lr(self.lr), alpha=self.rho, eps=self.eps, momentum=self.momentum,
                 centered=self.centered, weight_decay=self.weight_decay
             )
-            for index in range(len(self.optimizer_rmsprop.param_groups)):
-                update_param_group(index, self.defaults, self.optimizer_rmsprop)
             self.init_optim = True
         self.optimizer_rmsprop.zero_grad()
         loss.backward()
@@ -599,16 +597,24 @@ class SGD(object):
         self.init_optim = False
         self.weight_decay = weight_decay
         self.grad_clip = grad_clip
-        self.defaults = dict(
-            lr=lr,
-            momentum=momentum,
-            dampening=0,
-            weight_decay=weight_decay,
-            nesterov=False,
-            maximize=False,
-            foreach=None,
-            differentiable=False
-        )
+
+    def _init_group(self, group, params_with_grad, d_p_list, momentum_buffer_list):
+        has_sparse_grad = False
+
+        for p in group['params']:
+            if p.grad is not None:
+                params_with_grad.append(p)
+                d_p_list.append(p.grad)
+                if p.grad.is_sparse:
+                    has_sparse_grad = True
+
+                state = self.state[p]
+                if 'momentum_buffer' not in state:
+                    momentum_buffer_list.append(None)
+                else:
+                    momentum_buffer_list.append(state['momentum_buffer'])
+
+        return has_sparse_grad
 
     @torch.no_grad()
     def apply_gradients(self, grads_and_vars=None, closure=None):
@@ -624,37 +630,27 @@ class SGD(object):
             params_with_grad = []
             d_p_list = []
             momentum_buffer_list = []
-            weight_decay = group['weight_decay']
-            momentum = group['momentum']
-            dampening = group['dampening']
-            nesterov = group['nesterov']
-            maximize = group['maximize']
-            foreach = group['foreach']
-            lr = get_lr(self.lr)
 
-            for p in group['params']:
-                if p.grad is not None:
-                    params_with_grad.append(p)
-                    d_p_list.append(p.grad)
+            has_sparse_grad = self._init_group(group, params_with_grad, d_p_list, momentum_buffer_list)
+            
+            sgd_signature = inspect.signature(F.sgd)
+            params = sgd_signature.parameters
 
-                    state = self.optimizer_sgd.state[p]
-                    if 'momentum_buffer' not in state:
-                        momentum_buffer_list.append(None)
-                    else:
-                        momentum_buffer_list.append(state['momentum_buffer'])
-
-            F.sgd(
-                params_with_grad,
-                d_p_list,
-                momentum_buffer_list,
-                weight_decay=weight_decay,
-                momentum=momentum,
-                lr=lr,
-                dampening=dampening,
-                nesterov=nesterov,
-                maximize= maximize,
-                foreach=foreach
-            )
+            sgd_args = {
+                'params': params_with_grad,
+                'd_p_list': d_p_list,
+                'momentum_buffer_list': momentum_buffer_list,
+                'weight_decay': group['weight_decay'],
+                'momentum': group['momentum'],
+                'lr': get_lr(self.lr),
+                'dampening': group['dampening'],
+                'nesterov': group['nesterov'],
+                'has_sparse_grad': has_sparse_grad
+            }
+            for param in ['maximize', 'foreach', 'differentiable']:
+                if param in params:
+                    sgd_args[param] = group[param]
+            F.sgd(**sgd_args)
 
             # update momentum_buffers in state
             for p, momentum_buffer in zip(params_with_grad, momentum_buffer_list):
@@ -670,8 +666,6 @@ class SGD(object):
             self.optimizer_sgd = optimizer.SGD(
                 params=weights, lr=get_lr(self.lr), momentum=self.momentum, weight_decay=self.weight_decay
             )
-            for index in range(len(self.optimizer_sgd.param_groups)):
-                update_param_group(index, self.defaults, self.optimizer_sgd)
             self.init_optim = True
         self.optimizer_sgd.zero_grad()
         loss.backward()
@@ -701,16 +695,24 @@ class Momentum(object):
         self.weight_decay = weight_decay
         self.nesterov = nesterov
         self.grad_clip = grad_clip
-        self.defaults = dict(
-            lr=lr,
-            momentum=momentum,
-            dampening=0,
-            weight_decay=weight_decay,
-            nesterov=False,
-            maximize=False,
-            foreach=None,
-            differentiable=False
-        )
+
+    def _init_group(self, group, params_with_grad, d_p_list, momentum_buffer_list):
+        has_sparse_grad = False
+
+        for p in group['params']:
+            if p.grad is not None:
+                params_with_grad.append(p)
+                d_p_list.append(p.grad)
+                if p.grad.is_sparse:
+                    has_sparse_grad = True
+
+                state = self.state[p]
+                if 'momentum_buffer' not in state:
+                    momentum_buffer_list.append(None)
+                else:
+                    momentum_buffer_list.append(state['momentum_buffer'])
+
+        return has_sparse_grad
 
     @torch.no_grad()
     def apply_gradients(self, grads_and_vars=None, closure=None):
@@ -726,41 +728,31 @@ class Momentum(object):
             params_with_grad = []
             d_p_list = []
             momentum_buffer_list = []
-            weight_decay = group['weight_decay']
-            momentum = group['momentum']
-            dampening = group['dampening']
-            nesterov = group['nesterov']
-            maximize = group['maximize']
-            foreach = group['foreach']
-            lr = get_lr(self.lr)
 
-            for p in group['params']:
-                if p.grad is not None:
-                    params_with_grad.append(p)
-                    d_p_list.append(p.grad)
+            has_sparse_grad = self._init_group(group, params_with_grad, d_p_list, momentum_buffer_list)
+            
+            momentum_signature = inspect.signature(F.sgd)
+            params = momentum_signature.parameters
 
-                    state = self.optimizer_momentum.state[p]
-                    if 'momentum_buffer' not in state:
-                        momentum_buffer_list.append(None)
-                    else:
-                        momentum_buffer_list.append(state['momentum_buffer'])
-
-            F.sgd(
-                params_with_grad,
-                d_p_list,
-                momentum_buffer_list,
-                weight_decay=weight_decay,
-                momentum=momentum,
-                lr=lr,
-                dampening=dampening,
-                nesterov=nesterov,
-                maximize= maximize,
-                foreach=foreach
-            )
+            momentum_args = {
+                'params': params_with_grad,
+                'd_p_list': d_p_list,
+                'momentum_buffer_list': momentum_buffer_list,
+                'weight_decay': group['weight_decay'],
+                'momentum': group['momentum'],
+                'lr': get_lr(self.lr),
+                'dampening': group['dampening'],
+                'nesterov': group['nesterov'],
+                'has_sparse_grad': has_sparse_grad
+            }
+            for param in ['maximize', 'foreach', 'differentiable']:
+                if param in params:
+                    momentum_args[param] = group[param]
+            F.sgd(**momentum_args)
 
             # update momentum_buffers in state
             for p, momentum_buffer in zip(params_with_grad, momentum_buffer_list):
-                state = self.optimizer_momentum.state[p]
+                state = self.optimizer_sgd.state[p]
                 state['momentum_buffer'] = momentum_buffer
 
         return loss
@@ -769,13 +761,11 @@ class Momentum(object):
         if weights is None:
             raise AttributeError("Parameter train_weights must be entered.")
         if not self.init_optim:
-            self.optimizer_momentum = optimizer.SGD(
-                params=weights, lr=get_lr(self.lr), momentum=self.momentum, weight_decay=self.weight_decay, nesterov=self.nesterov
+            self.optimizer_sgd = optimizer.SGD(
+                params=weights, lr=get_lr(self.lr), momentum=self.momentum, weight_decay=self.weight_decay
             )
-            for index in range(len(self.optimizer_momentum.param_groups)):
-                update_param_group(index, self.defaults, self.optimizer_momentum)
             self.init_optim = True
-        self.optimizer_momentum.zero_grad()
+        self.optimizer_sgd.zero_grad()
         loss.backward()
 
         if self.grad_clip is not None:
@@ -806,11 +796,11 @@ def get_lr(lr):
         return lr()
     return lr
 
-def update_param_group(index, defaults, optimizer):
+# def update_param_group(index, defaults, optimizer):
 
-    param_group = optimizer.param_groups[index]
-    if not set(defaults.keys())==(set(param_group.keys())):
-        for name, default in defaults.items():
-            cast(dict, param_group).setdefault(name, default)
+#     param_group = optimizer.param_groups[index]
+#     if not set(defaults.keys())==(set(param_group.keys())):
+#         for name, default in defaults.items():
+#             cast(dict, param_group).setdefault(name, default)
 
-    optimizer.param_groups[index] = param_group
+#     optimizer.param_groups[index] = param_group
