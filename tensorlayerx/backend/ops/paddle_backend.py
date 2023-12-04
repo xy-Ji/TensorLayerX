@@ -1435,7 +1435,7 @@ def divide(x, y):
 
 def identity(x):
 
-    return x
+    return x.clone()
 
 
 class BatchToSpace(object):
@@ -2032,3 +2032,7 @@ def mv(x, vec):
 
     return paddle.mv(x, vec)
 
+def detach(x):
+    detached_tensor = x.clone()
+    detached_tensor.stop_gradient = True
+    return detached_tensor

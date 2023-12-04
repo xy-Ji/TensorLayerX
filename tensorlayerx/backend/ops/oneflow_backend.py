@@ -1439,7 +1439,7 @@ def divide(x, y):
 
 def identity(x):
 
-    raise NotImplementedError
+    return flow.clone()
 
 class BatchToSpace(object):
 
@@ -2016,3 +2016,5 @@ def mv(x, vec):
 
     raise NotImplementedError
 
+def detach(x):
+    return x.detach()

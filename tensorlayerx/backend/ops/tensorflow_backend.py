@@ -4229,3 +4229,6 @@ def mv(x, vec):
 
     """
     pass
+
+def detach(x):
+    return tf.stop_gradient(x)

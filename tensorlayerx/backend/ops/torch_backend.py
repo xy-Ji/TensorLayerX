@@ -1874,3 +1874,5 @@ def mv(x, vec):
 
     return torch.mv(x, vec)
 
+def detach(x):
+    return x.detach()
