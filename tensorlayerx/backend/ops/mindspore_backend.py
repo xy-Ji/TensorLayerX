@@ -400,10 +400,11 @@ class MatMul(Cell):
 
     def __init__(self, transpose_a=False, transpose_b=False):
         super(MatMul, self).__init__()
-        self.matmul = ms.ops.MatMul(transpose_a=transpose_a, transpose_b=transpose_b)
+        self.transpose_a = transpose_a
+        self.transpose_b = transpose_b
 
     def construct(self, a, b):
-        return self.matmul(a, b)
+        return ms.ops.matmul(a, b)
 
 
 def matmul(a, b, transpose_a=False, transpose_b=False):
@@ -601,6 +602,8 @@ def convert_to_tensor(value, dtype=None, device = None):
     -------
         A Tensor based on value.
     """
+    if isinstance(dtype, str):
+        dtype = _dtypeDict[dtype]
     return Tensor(value, dtype=dtype)
 
 
@@ -837,7 +840,7 @@ def stack(values, axis=0):
     -------
         A stacked Tensor with the same type as values.
     """
-    _stack = P.Pack(axis=axis)
+    _stack = P.Stack(axis=axis)
     return _stack(values)
 
 
@@ -1000,12 +1003,8 @@ class Transpose(Cell):
         super(Transpose, self).__init__()
         self.perm = tuple(perm)
         self.conjugate = conjugate
-        self.transpose = P.Transpose()
-        if self.conjugate:
-            raise NotImplementedError("conjugate not implemented")
-
     def construct(self, a):
-        return self.transpose(a, self.perm)
+        return transpose(a, self.perm, self.conjugate)
 
 
 def transpose(a, perm=None, conjugate=False):
@@ -1025,9 +1024,19 @@ def transpose(a, perm=None, conjugate=False):
     -------
         A transposed Tensor.
     """
-    outputs = ms.ops.transpose(a, tuple(perm))
-    return outputs
-
+    if perm == None:
+        if len(a.shape) <= 2:
+            return ms.ops.t(a)
+        if len(a.shape) == 3:
+            perm = [2, 1, 0]
+        if len(a.shape) == 4:
+            perm = [3, 2, 1, 0]
+        if len(a.shape) == 5:
+            perm = [4, 3, 2, 1, 0]
+    out = ms.ops.transpose(a, perm)
+    if conjugate:
+        out = ms.ops.conj(out)
+    return out
 
 def gather_nd(params, indices, batch_dims=0):
     """
