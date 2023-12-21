@@ -552,9 +552,11 @@ def reshape(tensor, shape):
     -------
         A Tensor. Has the same type as tensor
     """
-    reshape_obj = P.Reshape()
-    outputs = reshape_obj(tensor, tuple(shape))
-    return outputs
+    shape = list(shape)
+    for i in range(len(shape)):
+        if isinstance(shape[i], Tensor):
+            shape[i] = shape[i].item()
+    return ms.ops.reshape(tensor, tuple(shape))
 
 
 class Concat(Cell):
@@ -604,6 +606,11 @@ def convert_to_tensor(value, dtype=None, device = None):
     """
     if isinstance(dtype, str):
         dtype = _dtypeDict[dtype]
+    if isinstance(value, Tensor):
+        if dtype is None:
+            return value
+        else:
+            return value.astype(dtype)
     return Tensor(value, dtype=dtype)
 
 
@@ -1758,12 +1765,14 @@ def squeeze(x, axis=None):
 
 
 def unsorted_segment_sum(x, segment_ids, num_segments):
+    num_segments = int(num_segments)
     segment_ids = convert_to_tensor(segment_ids, ms.int32)
     op = P.UnsortedSegmentSum()
     return op(x, segment_ids, num_segments)
 
 
 def unsorted_segment_mean(x, segment_ids, num_segments):
+    num_segments = int(num_segments)
     segment_ids = convert_to_tensor(segment_ids, ms.int32)
     op = P.UnsortedSegmentSum()
     x_one = msnp.ones_like(x, dtype=x.dtype)
@@ -1773,12 +1782,14 @@ def unsorted_segment_mean(x, segment_ids, num_segments):
     return sum/one
 
 def unsorted_segment_min(x, segment_ids, num_segments):
+    num_segments = int(num_segments)
     segment_ids = convert_to_tensor(segment_ids, ms.int32)
     op = P.UnsortedSegmentMin()
     return op(x, segment_ids, num_segments)
 
 
 def unsorted_segment_max(x, segment_ids, num_segments):
+    num_segments = int(num_segments)
     segment_ids = convert_to_tensor(segment_ids, ms.int32)
     op = P.UnsortedSegmentMax()
     return op(x, segment_ids, num_segments)
