@@ -99,6 +99,7 @@ class Constant(Initializer):
         self.value = value
         self.constant = initializer.Constant(value=value)
 
+    def __call__(self, shape, dtype=tlx.float32):
         if isinstance(self.value, (int, float)):
             arr = np.ndarray(shape)
             self.constant(arr)
