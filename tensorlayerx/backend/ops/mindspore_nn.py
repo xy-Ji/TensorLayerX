@@ -8,13 +8,13 @@ import mindspore.ops as P
 from mindspore import context
 from mindspore.ops.primitive import constexpr
 from mindspore.nn.cell import Cell
-from mindspore._checkparam import Rel
+from mindspore._checkparam import INC_LEFT
 from mindspore.ops import functional as F
 from mindspore.communication import management
 from mindspore.ops.operations import _inner_ops as inner
 from mindspore._extends import cell_attr_register
-from mindspore.ops._grad.grad_base import bprop_getters
-from mindspore._checkparam import Validator as validator
+from mindspore.ops._grad_experimental.grad_base import bprop_getters
+from mindspore._checkparam import check_value_type, check_string, check_positive_int, check_isinstance, check_int_range, check_types_same_and_valid
 from mindspore.communication.management import get_group_size, get_rank
 from mindspore.ops.operations import LayerNorm
 import mindspore.numpy as np
@@ -1301,13 +1301,13 @@ class BatchNorm(Cell):
             data_format = "NHWC"
         elif data_format in ["channels_first", "NCHW", "nchw"]:
             data_format = "NCHW"
-        validator.check_value_type('num_features', num_features, [int], self.cls_name)
+        check_value_type('num_features', num_features, [int], self.cls_name)
         if num_features < 1:
             raise ValueError("num_features must be at least 1")
 
         if decay < 0 or decay > 1:
             raise ValueError("momentum should be a number in range [0, 1], but got {}".format(decay))
-        self.format = validator.check_string(data_format, ['NCHW', 'NHWC'], 'format', self.cls_name)
+        self.format = check_string(data_format, ['NCHW', 'NHWC'], 'format', self.cls_name)
         if context.get_context("device_target") != "GPU" and self.format == "NHWC":
             raise ValueError("NHWC format only support in GPU target.")
         self.use_batch_statistics = is_train
@@ -1317,7 +1317,7 @@ class BatchNorm(Cell):
         self.moving_variance = moving_var
         self.gamma = gamma
         self.beta = beta
-        self.group_device_num = validator.check_positive_int(device_num_each_group)
+        self.group_device_num = check_positive_int(device_num_each_group)
         self.process_groups = process_groups
         self.is_global = False
         self.parallel_mode = context.get_auto_parallel_context("parallel_mode")
@@ -1340,10 +1340,10 @@ class BatchNorm(Cell):
             self.rank_id = get_rank()
             self.rank_size = get_group_size()
             if self.process_groups is not None:
-                validator.check_isinstance("process_groups", self.process_groups, list)
+                check_isinstance("process_groups", self.process_groups, list)
                 self._check_rank_ids(self.process_groups, self.rank_size)
                 for i in range(len(self.process_groups)):
-                    validator.check_isinstance("process_groups[" + str(i) + "]", self.process_groups[i], list)
+                    check_isinstance("process_groups[" + str(i) + "]", self.process_groups[i], list)
                     self.group_device_num = len(self.process_groups[i])
                     if self.rank_id in self.process_groups[i] and self.group_device_num > 1:
                         self.is_global = True
@@ -1405,7 +1405,7 @@ class BatchNorm(Cell):
     def _check_rank_ids(self, process_groups, rank_size):
         seen = set()
         for rid in itertools.chain(*process_groups):
-            validator.check_int_range(rid, 0, rank_size, Rel.INC_LEFT, "rank id in process_groups")
+            check_int_range(rid, 0, rank_size, INC_LEFT, "rank id in process_groups")
             if rid in seen:
                 raise ValueError("rank id in process_groups should not be duplicated.")
             seen.add(rid)
@@ -1924,7 +1924,7 @@ def _init_state(shape, dtype, is_lstm):
 @constexpr
 def _check_input_dtype_same_and_valid(args_name, args_value, valid_values, cls_name):
     args = {args_name[i]: args_value[i] for i in range(len(args_value))}
-    validator.check_types_same_and_valid(args, valid_values, cls_name)
+    check_types_same_and_valid(args, valid_values, cls_name)
 
 class rnnbase(Cell):
 

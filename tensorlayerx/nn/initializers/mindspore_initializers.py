@@ -100,9 +100,12 @@ class Constant(Initializer):
         self.constant = initializer.Constant(value=value)
 
     def __call__(self, shape, dtype=tlx.float32):
-        arr = np.ndarray(shape)
-        self.constant(arr)
-        return Tensor(arr, dtype=dtype)
+        if isinstance(self.value, (int, float)):
+            arr = np.ndarray(shape)
+            self.constant(arr)
+            return Tensor(arr, dtype=dtype)
+        elif isinstance(self.value, (Tensor, list, np.ndarray)):
+            return Tensor(self.value)
 
     def get_config(self):
         return {"value": self.value}
