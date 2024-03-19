@@ -968,7 +968,7 @@ def tile(input, multiples):
         A Tensor. Has the same type as input.
     """
     tile_obj = P.Tile()
-    outputs = tile_obj(input, multiples)
+    outputs = tile_obj(input, tuple(multiples))
     return outputs
 
 
@@ -1040,6 +1040,7 @@ def transpose(a, perm=None, conjugate=False):
             perm = [3, 2, 1, 0]
         if len(a.shape) == 5:
             perm = [4, 3, 2, 1, 0]
+    perm = tuple(perm)
     out = ms.ops.transpose(a, perm)
     if conjugate:
         out = ms.ops.conj(out)
@@ -1159,6 +1160,8 @@ def gather(params, indices, axis=None):
     op = P.Gather()
     if axis is None:
         axis = 0
+    if not isinstance(indices, ms.Tensor):
+        indices = convert_to_tensor(indices, dtype=int32)
     return op(params, indices, axis)
 
 
@@ -1389,7 +1392,7 @@ def divide(x, y):
     return ms.ops.div(x, y)
 
 def identity(x):
-    return ms.ops.identity(x)
+    return ms.nn.Identity()(x)
 
 
 class BatchToSpace(Cell):
@@ -1751,11 +1754,11 @@ def where(condition, x, y):
 
 
 def ones_like(x, dtype=None):
-    return msnp.ones_like(x, dtype=dtype)
+    return ms.ops.ones_like(x, dtype=dtype)
 
 
 def zeros_like(x, dtype=None):
-    return msnp.zeros_like(x, dtype=dtype)
+    return ms.ops.zeros_like(x, dtype=dtype)
 
 
 def squeeze(x, axis=None):

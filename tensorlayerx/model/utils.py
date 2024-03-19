@@ -149,7 +149,7 @@ class TrainOneStepWithMS(object):
         self.net_with_loss = net_with_loss
         self.optimizer = optimizer
         self.train_weights = train_weights
-        self.net_with_loss = net_with_loss
+        self.net_with_loss.set_grad()
         self.train_network = GradWrap(net_with_loss, train_weights)
 
     def __call__(self, data, label, *args, **kwargs):

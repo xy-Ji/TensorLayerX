@@ -28,7 +28,21 @@ __all__ = [
 
 softmax_cross_entropy_with_logits = nn.SoftmaxCrossEntropyWithLogits(sparse=True, reduction='mean')
 
-sigmoid_cross_entropy = P.SigmoidCrossEntropyWithLogits()
+def sigmoid_cross_entropy(output, target, reduction='mean'):
+    """Sigmoid cross-entropy operation, see ``tf.ops.sigmoid_cross_entropy_with_logits``.
+
+    Parameters
+    ----------
+    output : Tensor
+        A batch of distribution with shape: [batch_size, num of classes].
+    target : Tensor
+        same shape as the input.
+    reduction : str
+        The optional values are “mean”, “sum”, and “none”. If “none”, do not perform reduction.
+
+    """
+
+    return nn.BCEWithLogitsLoss(reduction=reduction)(output, target)
 
 
 def binary_cross_entropy(output, target, epsilon=1e-8, name='bce_loss'):
@@ -84,7 +98,7 @@ def normalized_mean_square_error(output, target, axis=-1, name="normalized_mean_
     raise NotImplementedError("Not Implemented.")
 
 
-def absolute_difference_error(output, target, is_mean=False, axis=-1, name="absolute_difference_error_loss"):
+def absolute_difference_error(output, target, reduction='mean'):
     """Return the TensorFlow expression of absolute difference error (L1) of two batch of data.
 
     Parameters
@@ -93,22 +107,18 @@ def absolute_difference_error(output, target, is_mean=False, axis=-1, name="abso
         2D, 3D or 4D tensor i.e. [batch_size, n_feature], [batch_size, height, width] or [batch_size, height, width, channel].
     target : Tensor
         The target distribution, format the same with `output`.
-    is_mean : boolean
-        Whether compute the mean or sum for each example.
-            - If True, use ``tf.reduce_mean`` to compute the loss between one target and predict data.
-            - If False, use ``tf.reduce_sum`` (default).
-    axis : int or list of int
-        The dimensions to reduce.
-    name : str
-        An optional name to attach to this function.
 
     """
 
-    # if is_mean:
-    #     loss = tf.reduce_mean(tf.reduce_mean(tf.abs(output - target), axis), name=name)
-    # else:
-    #     loss = tf.reduce_mean(tf.reduce_sum(tf.abs(output - target), axis), name=name)
-    raise NotImplementedError("Not Implemented.")
+    if reduction == 'mean':
+        loss = P.mean(P.abs(output - target))
+    elif reduction == 'sum':
+        loss = P.sum(P.abs(output - target))
+    elif reduction == 'none':
+        loss = P.abs(output - target)
+    else:
+        raise Exception("The reduction values are 'mean', 'sum', and 'none'.")
+    return loss
 
 
 def dice_coe(output, target, loss_type='jaccard', axis=(1, 2, 3), smooth=1e-5):
