@@ -904,7 +904,7 @@ def arange(start, limit=None, delta=1, dtype=None):
         An 1-D Tensor of type dtype.
     """
 
-    return msnp.arange(start = start, stop= limit, step=delta, dtype= dtype)
+    return ms.ops.arange(start = start, end = limit, step=delta, dtype= dtype)
 
 
 class ExpandDims(Cell):
@@ -1522,6 +1522,9 @@ def is_nan(x):
 
 
 def l2_normalize(x, axis=None, eps=1e-12):
+    if ms.context.get_context("device_target") == 'CPU':
+        norms = sqrt(maximum(reduce_sum(square(x), axis=axis, keepdims=True), 1e-12))
+        return x / norms
     _l2_normalize = ms.ops.L2Normalize(axis=axis, epsilon=eps)
     return _l2_normalize(x)
 
@@ -1740,9 +1743,8 @@ def logical_xor(x, y):
 
 
 def argsort(x, axis=-1, descending=False):
-    op = P.Sort(axis, descending)
-    _, index = op(x)
-    return index
+    x = cast(x, dtype=ms.float32)
+    return ms.ops.argsort(x, axis, descending)
 
 
 def bmm(x, y):
@@ -1825,9 +1827,9 @@ def mask_select(x, mask, axis = 0):
         axis = len(x.shape) + axis
     if x.shape == mask.shape:
         return ms.ops.MaskedSelect()(x, mask)
-    if isinstance(mask, ms.Tensor):
-        mask = mask.asnumpy()
-    mask = np.nonzero(mask)[0].tolist()
+    # if isinstance(mask, ms.Tensor):
+    #     mask = mask.asnumpy()
+    # mask = np.nonzero(mask)[0].tolist()
     if axis < 0:
         axis = len(x.shape) + axis
     if axis == 0:

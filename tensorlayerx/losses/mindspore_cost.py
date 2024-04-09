@@ -1,6 +1,7 @@
 #! /usr/bin/python
 # -*- coding: utf-8 -*-
 
+import mindspore as ms
 from mindspore import nn
 from mindspore.nn import Cell
 import mindspore.ops as P
@@ -26,7 +27,8 @@ __all__ = [
     'L1Loss'
 ]
 
-softmax_cross_entropy_with_logits = nn.SoftmaxCrossEntropyWithLogits(sparse=True, reduction='mean')
+def softmax_cross_entropy_with_logits(output, target, reduction='mean'):
+    return nn.SoftmaxCrossEntropyWithLogits(sparse=True, reduction='mean')(ms.Tensor(output.asnumpy()), target)
 
 def sigmoid_cross_entropy(output, target, reduction='mean'):
     """Sigmoid cross-entropy operation, see ``tf.ops.sigmoid_cross_entropy_with_logits``.
@@ -110,12 +112,13 @@ def absolute_difference_error(output, target, reduction='mean'):
 
     """
 
+    output = output.asnumpy()
     if reduction == 'mean':
-        loss = P.mean(P.abs(output - target))
+        loss = P.mean(P.abs(ms.Tensor(output) - target))
     elif reduction == 'sum':
-        loss = P.sum(P.abs(output - target))
+        loss = P.sum(P.abs(ms.Tensor(output) - target))
     elif reduction == 'none':
-        loss = P.abs(output - target)
+        loss = P.abs(ms.Tensor(output) - target)
     else:
         raise Exception("The reduction values are 'mean', 'sum', and 'none'.")
     return loss
