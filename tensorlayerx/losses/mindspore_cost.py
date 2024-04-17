@@ -47,7 +47,7 @@ def sigmoid_cross_entropy(output, target, reduction='mean'):
     return nn.BCEWithLogitsLoss(reduction=reduction)(output, target)
 
 
-def binary_cross_entropy(output, target, epsilon=1e-8, name='bce_loss'):
+def binary_cross_entropy(output, target, reduction='mean'):
     """Binary cross entropy operation.
 
     Parameters
@@ -72,7 +72,7 @@ def binary_cross_entropy(output, target, epsilon=1e-8, name='bce_loss'):
     #         -(target * tf.math.log(output + epsilon) + (1. - target) * tf.math.log(1. - output + epsilon)), axis=1
     #     ), name=name
     # )
-    raise NotImplementedError("Not Implemented.")
+    return ms.ops.binary_cross_entropy(logits=output, labels=target, reduction=reduction)
 
 
 mean_squared_error = nn.MSELoss(reduction='mean')
