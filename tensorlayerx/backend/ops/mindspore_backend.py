@@ -1040,8 +1040,7 @@ def transpose(a, perm=None, conjugate=False):
             perm = [3, 2, 1, 0]
         if len(a.shape) == 5:
             perm = [4, 3, 2, 1, 0]
-    perm = tuple(perm)
-    out = ms.ops.transpose(a, perm)
+    out = ms.ops.transpose(a, tuple(perm))
     if conjugate:
         out = ms.ops.conj(out)
     return out

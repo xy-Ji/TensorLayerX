@@ -5,10 +5,10 @@ import json
 import os
 import sys
 
-BACKEND = 'tensorflow'
+# BACKEND = 'tensorflow'
 # BACKEND = 'mindspore'
 # BACKEND = 'paddle'
-# BACKEND = 'torch'
+BACKEND = 'torch'
 # BACKEND = 'oneflow'
 
 # Check for backend.json files

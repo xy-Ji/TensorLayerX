@@ -610,9 +610,56 @@ class ModuleDict(Module):
                 self[m[0]] = m[1]
 
 
-def Parameter(data=None, requires_grad=True, name=None):
 
-    return ms.Parameter(default_input=data, requires_grad=requires_grad, name=name)
+class Parameter(Module):
+    """This function creates a parameter. The parameter is a learnable variable, which can have gradient, and can be optimized.
+
+    Parameters
+    ----------
+    data : Tensor
+        parameter tensor
+    requires_grad : bool
+        if the parameter requires gradient. Default: True
+
+    Returns
+    -------
+        Parameter
+
+    Examples
+    ----------
+    >>> import tensorlayerx as tlx
+    >>> para = tlx.nn.Parameter(data=tlx.ones((5,5)), requires_grad=True)
+
+    """
+
+    def __new__(self, data=None, requires_grad=True, name=None):
+        instance = super().__new__(self)
+        if name is None:
+            prefix = 'parameter'
+
+            if _global_layer_name_dict.get(prefix) is not None:
+                _global_layer_name_dict[prefix] += 1
+                name = prefix + '_' + str(_global_layer_name_dict[prefix])
+            else:
+                _global_layer_name_dict[prefix] = 0
+                name = prefix
+            while True:
+                if _global_layer_name_dict.get(name) is None:
+                    break
+                _global_layer_name_dict[prefix] += 1
+                name = prefix + '_' + str(_global_layer_name_dict[prefix])
+        else:
+            if _global_layer_name_dict.get(name) is not None:
+                pass
+            else:
+                _global_layer_name_dict[name] = 0
+        if data is None:
+            return instance
+        else:
+            return instance(data, requires_grad, name)
+
+    def __call__(self, data=None, trainable=True, name=None):
+        return ms.common.Parameter(default_input=data, name=name, requires_grad=trainable)
 
 
 class ParameterList(Module):

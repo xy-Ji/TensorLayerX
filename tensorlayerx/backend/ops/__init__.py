@@ -223,6 +223,7 @@ from .load_backend import expand
 from .load_backend import unique
 from .load_backend import flip
 from .load_backend import mv
+from .load_backend import detach
 # dtype
 from .load_backend import (
     DType, float16, float32, float64, int8, int16, int32, int64, uint8, uint16, uint32, uint64, bool, complex64,

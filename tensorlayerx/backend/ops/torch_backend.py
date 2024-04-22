@@ -467,7 +467,14 @@ def convert_to_tensor(value, dtype=None, device = None):
         device = torch.device('cpu')
     elif device == 'gpu':
         device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    return torch.tensor(value, dtype=dtype, device = device)
+    if isinstance(value, torch.Tensor):
+        if dtype is not None:
+            value = value.to(dtype)
+        value = value.to(device)
+    else:
+        value = torch.tensor(value, dtype=dtype, device=device)
+
+    return value
 
 
 def convert_to_numpy(value):
@@ -501,7 +508,7 @@ class ReduceSum(object):
 
     def __call__(self, input):
         if self.axis is not None:
-            return torch.sum(input=input, dim=self.axis)
+            return torch.sum(input=input, dim=self.axis, keepdim=self.keepdims)
         else:
             return torch.sum(input=input)
 
@@ -1263,7 +1270,7 @@ def divide(x, y):
 
 def identity(x):
 
-    raise NotImplementedError
+    return x.clone()
 
 
 class BatchToSpace(object):
@@ -1874,3 +1881,5 @@ def mv(x, vec):
 
     return torch.mv(x, vec)
 
+def detach(x):
+    return x.detach()
