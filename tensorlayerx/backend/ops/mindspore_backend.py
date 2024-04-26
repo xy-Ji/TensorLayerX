@@ -904,7 +904,7 @@ def arange(start, limit=None, delta=1, dtype=None):
         An 1-D Tensor of type dtype.
     """
 
-    return msnp.arange(start = start, stop= limit, step=delta, dtype= dtype)
+    return ms.ops.arange(start = start, end = limit, step=delta, dtype= dtype)
 
 
 class ExpandDims(Cell):
@@ -968,7 +968,7 @@ def tile(input, multiples):
         A Tensor. Has the same type as input.
     """
     tile_obj = P.Tile()
-    outputs = tile_obj(input, multiples)
+    outputs = tile_obj(input, tuple(multiples))
     return outputs
 
 
@@ -1040,7 +1040,7 @@ def transpose(a, perm=None, conjugate=False):
             perm = [3, 2, 1, 0]
         if len(a.shape) == 5:
             perm = [4, 3, 2, 1, 0]
-    out = ms.ops.transpose(a, perm)
+    out = ms.ops.transpose(a, tuple(perm))
     if conjugate:
         out = ms.ops.conj(out)
     return out
@@ -1159,6 +1159,8 @@ def gather(params, indices, axis=None):
     op = P.Gather()
     if axis is None:
         axis = 0
+    if not isinstance(indices, ms.Tensor):
+        indices = convert_to_tensor(indices, dtype=int32)
     return op(params, indices, axis)
 
 
@@ -1389,7 +1391,7 @@ def divide(x, y):
     return ms.ops.div(x, y)
 
 def identity(x):
-    return ms.ops.identity(x)
+    return ms.nn.Identity()(x)
 
 
 class BatchToSpace(Cell):
@@ -1519,6 +1521,9 @@ def is_nan(x):
 
 
 def l2_normalize(x, axis=None, eps=1e-12):
+    if ms.context.get_context("device_target") == 'CPU':
+        norms = sqrt(maximum(reduce_sum(square(x), axis=axis, keepdims=True), 1e-12))
+        return x / norms
     _l2_normalize = ms.ops.L2Normalize(axis=axis, epsilon=eps)
     return _l2_normalize(x)
 
@@ -1737,9 +1742,8 @@ def logical_xor(x, y):
 
 
 def argsort(x, axis=-1, descending=False):
-    op = P.Sort(axis, descending)
-    _, index = op(x)
-    return index
+    x = cast(x, dtype=ms.float32)
+    return ms.ops.argsort(x, axis, descending)
 
 
 def bmm(x, y):
@@ -1751,11 +1755,11 @@ def where(condition, x, y):
 
 
 def ones_like(x, dtype=None):
-    return msnp.ones_like(x, dtype=dtype)
+    return ms.ops.ones_like(x, dtype=dtype)
 
 
 def zeros_like(x, dtype=None):
-    return msnp.zeros_like(x, dtype=dtype)
+    return ms.ops.zeros_like(x, dtype=dtype)
 
 
 def squeeze(x, axis=None):
@@ -1822,9 +1826,9 @@ def mask_select(x, mask, axis = 0):
         axis = len(x.shape) + axis
     if x.shape == mask.shape:
         return ms.ops.MaskedSelect()(x, mask)
-    if isinstance(mask, ms.Tensor):
-        mask = mask.asnumpy()
-    mask = np.nonzero(mask)[0].tolist()
+    # if isinstance(mask, ms.Tensor):
+    #     mask = mask.asnumpy()
+    # mask = np.nonzero(mask)[0].tolist()
     if axis < 0:
         axis = len(x.shape) + axis
     if axis == 0:
@@ -1979,8 +1983,3 @@ def flip(x, axis):
 def mv(x, vec):
 
     return ms.ops.mv(x, vec)
-
-def detach(x):
-    detached_tensor = ms.Tensor(x)
-    detached_tensor.requires_grad = False
-    return detached_tensor
