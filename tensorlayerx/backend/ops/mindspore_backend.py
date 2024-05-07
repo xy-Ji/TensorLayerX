@@ -1983,3 +1983,8 @@ def flip(x, axis):
 def mv(x, vec):
 
     return ms.ops.mv(x, vec)
+
+def detach(x):
+    detached_tensor = ms.Tensor(x)
+    detached_tensor.requires_grad = False
+    return detached_tensor
