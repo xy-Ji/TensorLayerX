@@ -36,9 +36,9 @@ if 'TENSORLAYER_PACKAGE_BUILDING' not in os.environ:
 
 backend_v = {
     'tensorflow': '2.4.0',
-    'mindspore': '1.8.1',
+    'mindspore': '2.2.0',
     'paddle': '2.2.0',
-    'torch': '1.10.0',
+    'torch': '2.1.0',
 }
 
 if BACKEND_VERSION != backend_v[BACKEND]:
