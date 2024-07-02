@@ -28,7 +28,9 @@ __all__ = [
 ]
 
 def softmax_cross_entropy_with_logits(output, target, reduction='mean'):
-    return nn.SoftmaxCrossEntropyWithLogits(sparse=True, reduction='mean')(output, target)
+    if (target.dtype != ms.int32 and target.dtype != ms.int64):
+        return nn.SoftmaxCrossEntropyWithLogits(sparse=False, reduction=reduction)(output, target)
+    return nn.SoftmaxCrossEntropyWithLogits(sparse=True, reduction=reduction)(output, target)
 
 def sigmoid_cross_entropy(output, target, reduction='mean'):
     """Sigmoid cross-entropy operation, see ``tf.ops.sigmoid_cross_entropy_with_logits``.
