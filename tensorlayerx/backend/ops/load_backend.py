@@ -9,6 +9,7 @@ import sys
 # BACKEND = 'mindspore'
 # BACKEND = 'paddle'
 BACKEND = 'torch'
+# BACKEND = 'jittor'
 # BACKEND = 'oneflow'
 
 # Check for backend.json files
@@ -88,5 +89,13 @@ elif BACKEND == 'oneflow':
     BACKEND_VERSION = flow.__version__
 
     sys.stderr.write('Using OneFlow backend.\n')
+
+elif BACKEND == 'jittor':
+    from .jittor_nn import *
+    from .jittor_backend import *
+    import jittor as jt
+    BACKEND_VERSION = jt.__version__
+    sys.stderr.write('Using jittor backend.\n')
+
 else:
     raise NotImplementedError("This backend is not supported")
