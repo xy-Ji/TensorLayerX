@@ -1,87 +1,59 @@
 #! /usr/bin/python
 # -*- coding: utf-8 -*-
 
-# Unified API for TensorLayerX, using OneFlow as backend.
-# Similar to file ./torch_backend.py and ./tensorflow_backend.py
-
 from __future__ import absolute_import, division, print_function
-
-from .oneflow_nn import nchw_to_nhwc, nhwc_to_nchw
-import oneflow as flow
-import oneflow.nn as nn
-import oneflow.nn.functional as F
-
-
-
+from .jittor_nn import nchw_to_nhwc, nhwc_to_nchw
+import jittor as jt
+# import jittor.nn.functional as F
 import numpy as np
 import random
+import jittor.nn as nn 
+
 
 _dtypeDict = {
-    'Dtype': flow.dtype,
-    'float16': flow.float16,
-    'float32': flow.float32,
-    'float64': flow.float64,
-    'int8': flow.int8,
-    'int16': None,
-    'int32': flow.int32,
-    'int64': flow.int64,
-    'uint8': flow.uint8,
+    'DType': None,
+    'float16': jt.float16,
+    'float32': jt.float32,
+    'float64': jt.float64,
+    'int8': jt.int8,
+    'int16': jt.int16,
+    'int32': jt.int32,
+    'int64': jt.int64,
+    'uint8': jt.uint8,
     'uint16': None,
     'uint32': None,
     'uint64': None,
-    'bool': flow.bool,
-    'complex64': None,
-    'complex128': None
+    'bool': jt.bool,
+
 }
 
-DType = flow.dtype
-float16 = flow.float16
-float32 = flow.float32
-float64 = flow.float64
-int8 = flow.int8
-int16 = None
-int32 = flow.int32
-int64 = flow.int64
-uint8 = flow.uint8
-uint16 = None
-uint32 = None
-uint64 = None
-bool = flow.bool
+DType = None
+float16 = jt.float16
+float32 = jt.float32
+float64 = jt.float64
+int8 = jt.int8
+int16 = jt.int16
+int32 = jt.int32
+int64 = jt.int64
+uint8 = jt.uint8
+uint16 = jt.uint16
+uint32 = jt.uint32
+uint64 = jt.uint64
+bool = None
 complex64 = None
 complex128 = None
 
 
 def set_context(**kwargs):
-    """Set the context for the backend.
-    """
-    raise Exception("Using OneFlow backend, set_context is not supported.")
+    raise Exception("Using PyTorch backend,You don't need to set context")
 
 
 def get_tensor_shape(x):
-    """
-    Get the shape of tensor
-
-    Parameters
-    ----------
-    x : tensor
-         type float16, float32, float64, int32, complex64, complex128.
-
-    Returns
-    -------
-        list.
-
-    Examples
-    ---------
-    >>> import tensorlayerx as tlx
-    >>> x_in = tlx.layers.Input((32, 3, 3, 32))
-    >>> x_shape = tlx.ops.get_tensor_shape(x_in)
-
-    """
     return list(x.shape)
 
 
 # initializers
-def zeros(shape, dtype=None, device=None):
+def zeros(shape, dtype=None, device = None):
     """
     Creates a tensor with all elements set to zero.
 
@@ -97,17 +69,15 @@ def zeros(shape, dtype=None, device=None):
         A Tensor with all elements set to zero.
 
     """
-    if device == 'cpu':
-        device = flow.device('cpu')
-    else:
-        device = flow.device('cuda' if flow.cuda.is_available() else 'cpu')
-
-    return flow.zeros(shape, dtype=_dtypeDict[dtype], device=device)
+    if device == 'gpu':
+        jt.flags.use_cuda = 1
+    
+    return jt.zeros(shape, dtype)
 
 
-def ones(shape, dtype=None, device=None):
+def ones(shape, dtype=None, device = None):
     """
-    Creates a tensor with all elements set to one.
+    Creates a tensor with all elements set to ones.
 
     Parameters
     ----------
@@ -118,40 +88,45 @@ def ones(shape, dtype=None, device=None):
 
     Returns
     -------
-        A Tensor with all elements set to one.
+        A Tensor with all elements set to zero.
 
     """
-    if device == 'cpu':
-        device = flow.device('cpu')
-    else:
-        device = flow.device('cuda' if flow.cuda.is_available() else 'cpu')
+    if device == 'gpu':
+        jt.flags.use_cuda = 1
+        
+    # Check if dtype is None, if so, set it to 'float32' by default
+    if dtype is None:
+        dtype = 'float32'
+        
+    # Ensure shape is passed as a tuple
+    if isinstance(shape, list):
+        shape = tuple(shape)
+    
+    # Call Jittor's ones function
+    return jt.ones(shape, dtype=dtype)
 
-    return flow.ones(shape, dtype=_dtypeDict[dtype], device=device)
-
-
-def constant(value, shape, dtype=None, device=None):
+def constant(value, dtype=None, shape=None, device =None):
     """
-    Creates a tensor with all elements set to the value.
+    Creates a constant tensor from a tensor-like object.
 
     Parameters
     ----------
-    value : A constant value (or list)
-    shape : A list of integers
-        a tuple of integers, or a 1-D Tensor of type int32.
+    value : int
+        A constant value (or list) of output type dtype.
     dtype : tensor
-        The DType of an element in the resulting Tensor
+         The type of the elements of the resulting tensor.
+    shape : tuple
+        Optional dimensions of resulting tensor.
 
     Returns
     -------
-        A Tensor with all elements set to the value.
+        A Constant Tensor.
 
     """
-    if device == 'cpu':
-        device = flow.device('cpu')
-    else:
-        device = flow.device('cuda' if flow.cuda.is_available() else 'cpu')
-
-    return flow.full(shape, value, dtype=_dtypeDict[dtype], device=device)
+    if device == 'gpu':
+        jt.flags.use_cuda = 1
+    w = jt.empty(shape, dtype=dtype)
+    return jt.nn.init.constant_(w, value)
 
 
 def random_uniform(shape, minval=0, maxval=1, dtype=None, seed=None):
@@ -176,12 +151,11 @@ def random_uniform(shape, minval=0, maxval=1, dtype=None, seed=None):
 
     """
 
-    if seed is not None:
-        flow.manual_seed(seed)
+    if seed is None:
+        jt.random.seed()
     else:
-        flow.manual_seed(flow.initial_seed())
-
-    w = flow.randn(shape, dtype=_dtypeDict[dtype])
+        jt.random.manual_seed(seed)
+    w = jt.randn(size=shape, dtype=dtype)
     out = w.uniform_(minval, maxval)
     return out
 
@@ -194,14 +168,15 @@ def random_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
     ----------
     shape : tuple
         A 1-D integer Tensor or Python array. The shape of the output tensor.
-    mean : int
-        The mean of the normal distribution.
-    stddev : int
+    mean : float
+        The mean of the normal distribution
+    stddev : float
         The standard deviation of the normal distribution.
     dtype : tensor
-        The type of the output: float16, float32, float64, int32, or int64.
-    seed : int
-         Used in combination with tf.random.set_seed to create a reproducible sequence of tensors across multiple calls.
+        The type of the output.
+    seed : A Python integer
+         Used to create a random seed for the distribution
+
     Returns
     -------
         A tensor of the specified shape filled with random normal values.
@@ -209,11 +184,10 @@ def random_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
     """
 
     if seed is not None:
-        flow.manual_seed(seed)
-    else:
-        flow.manual_seed(flow.initial_seed())
-
-    return flow.normal(shape, mean=mean, std=stddev, dtype=_dtypeDict[dtype])
+        jt.set_global_seed(seed)
+    w = jt.randn(shape, dtype)
+    out = w * stddev + mean
+    return out
 
 
 def truncated_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
@@ -224,239 +198,146 @@ def truncated_normal(shape, mean=0.0, stddev=1.0, dtype=None, seed=None):
     ----------
     shape : tuple
         A 1-D integer Tensor or Python array. The shape of the output tensor.
-    mean : int
-        The mean of the normal distribution.
-    stddev : int
+    mean : float
+        The mean of the normal distribution
+    stddev : float
         The standard deviation of the normal distribution.
     dtype : tensor
-        The type of the output: float16, float32, float64, int32, or int64.
-    seed : int
-         Used in combination with tf.random.set_seed to create a reproducible sequence of tensors across multiple calls.
+        The type of the output.
+    seed : A Python integer
+         Used to create a random seed for the distribution
+
     Returns
     -------
-        A tensor of the specified shape filled with random normal values.
+        A tensor of the specified shape filled with random truncated normal values.
 
     """
 
-    if seed is not None:
-        flow.manual_seed(seed)
-    else:
-        flow.manual_seed(flow.initial_seed())
+    if dtype is None:
+        dtype = jt.float32
+    tensor = jt.empty(shape, dtype=dtype)
 
-    w = flow.empty(shape, dtype=_dtypeDict[dtype])
-    out = nn.init.truncated_normal_(w, mean=mean, std=stddev)
+    out = jt.nn.init.trunc_normal_(tensor, mean=mean, std=stddev)
     return out
 
 
-def he_normal(shape, dtype=None, seed=None):
+def he_normal(shape, a = 0, mode = 'fan_in', nonlinearity='leaky_relu', dtype=None, seed=None):
     """
     He normal initializer.
 
-    It draws samples from a truncated normal distribution centered on 0 with stddev = sqrt(2 / fan_in) where fan_in is the number of input units in the weight tensor.
-
     Parameters
     ----------
+    seed : A Python integer.
+        Used to seed the random generator.
     shape : tuple
         A 1-D integer Tensor or Python array. The shape of the output tensor.
     dtype : tensor
-        The type of the output: float16, float32, float64, int32, or int64.
-    seed : int
-         Used in combination with tf.random.set_seed to create a reproducible sequence of tensors across multiple calls.
+        The type of the output.
+
     Returns
     -------
-        A tensor of the specified shape filled with random normal values.
-
+        A tensor of the specified shape filled with he normal values.
     """
 
-    if seed is not None:
-        flow.manual_seed(seed)
-    else:
-        flow.manual_seed(flow.initial_seed())
-
-    w = flow.empty(shape, dtype=_dtypeDict[dtype])
-    out = nn.init.kaiming_normal_(w)
+    tensor = jt.empty(shape, dtype=dtype)
+    out = jt.nn.init.kaiming_normal_(tensor, a=a, mode = mode, nonlinearity = nonlinearity)
     return out
 
+def he_uniform(shape, a = 0, mode = 'fan_in', nonlinearity='leaky_relu', dtype=None, seed=None):
 
-def he_uniform(shape, dtype=None, seed=None):
-    """
-    He uniform variance scaling initializer.
-
-    It draws samples from a uniform distribution within [-limit, limit] where limit is sqrt(6 / fan_in) where fan_in is the number of input units in the weight tensor.
-
-    Parameters
-    ----------
-    shape : tuple
-        A 1-D integer Tensor or Python array. The shape of the output tensor.
-    dtype : tensor
-        The type of the output: float16, float32, float64, int32, or int64.
-    seed : int
-         Used in combination with tf.random.set_seed to create a reproducible sequence of tensors across multiple calls.
-    Returns
-    -------
-        A tensor of the specified shape filled with random uniform values.
-
-    """
-
-    if seed is not None:
-        flow.manual_seed(seed)
-    else:
-        flow.manual_seed(flow.initial_seed())
-
-    w = flow.empty(shape, dtype=_dtypeDict[dtype])
-    out = nn.init.kaiming_uniform_(w)
+    tensor = jt.empty(shape, dtype=dtype)
+    out = jt.nn.init.kaiming_uniform_(tensor, a=a, mode = mode, nonlinearity = nonlinearity)
     return out
 
-
-def xavier_normal(shape, dtype=None, seed=None):
-    """
-    Xavier normal initializer.
-
-    It draws samples from a truncated normal distribution centered on 0 with stddev = sqrt(2 / (fan_in + fan_out)) where fan_in is the number of input units in the weight tensor and fan_out is the number of output units in the weight tensor.
-
-    Parameters
-    ----------
-    shape : tuple
-        A 1-D integer Tensor or Python array. The shape of the output tensor.
-    dtype : tensor
-        The type of the output: float16, float32, float64, int32, or int64.
-    seed : int
-         Used in combination with tf.random.set_seed to create a reproducible sequence of tensors across multiple calls.
-    Returns
-    -------
-        A tensor of the specified shape filled with random normal values.
-
-    """
-
+def xavier_normal(shape, gain=1.0, dtype='float32', seed=None):
     if seed is not None:
-        flow.manual_seed(seed)
-    else:
-        flow.manual_seed(flow.initial_seed())
-
-    w = flow.empty(shape, dtype=_dtypeDict[dtype])
-    out = nn.init.xavier_normal_(w)
-    return out
+        jt.set_global_seed(seed)
+    stddev = gain * np.sqrt(2.0 / (shape[-2] + shape[-1]))
+    return jt.init.gauss(std=stddev, shape=shape, dtype=dtype)
 
 
-def xavier_uniform(shape, gain=1.0, dtype=None, seed=None):
-    """
-    Xavier uniform initializer.
-
-    It draws samples from a uniform distribution within [-limit, limit] where limit is sqrt(6 / (fan_in + fan_out)) where fan_in is the number of input units in the weight tensor and fan_out is the number of output units in the weight tensor.
-
-    Parameters
-    ----------
-    shape : tuple
-        A 1-D integer Tensor or Python array. The shape of the output tensor.
-    gain : float
-        A multiplicative factor.
-    dtype : tensor
-        The type of the output: float16, float32, float64, int32, or int64.
-    seed : int
-         Used in combination with tf.random.set_seed to create a reproducible sequence of tensors across multiple calls.
-    Returns
-    -------
-        A tensor of the specified shape filled with random uniform values.
-
-    """
-
-    if seed is not None:
-        flow.manual_seed(seed)
-    else:
-        flow.manual_seed(flow.initial_seed())
-
-    w = flow.empty(shape, dtype=_dtypeDict[dtype])
-    out = nn.init.xavier_uniform_(w, gain=gain)
-    return out
+def xavier_uniform(shape, gain = 1.0, dtype=None, seed=None):
+    _tensor = jt.empty(shape, dtype=dtype)
+    return jt.nn.init.xavier_uniform_(_tensor, gain)
 
 
 def Variable(initial_value, name=None, trainable=True):
     """
-    Creates a new Variable.
+    Creates a new variable with value initial_value.
 
     Parameters
     ----------
     initial_value : tensor
-        A Tensor or Python object convertible to a Tensor which is the initial value for the Variable.
+        A Tensor, or Python object convertible to a Tensor
     name : str
-        A name for the operation (optional).
-    trainable : bool
-        If True, also add the variable to the graph collection GraphKeys.TRAINABLE_VARIABLES (see tf.Variable).
-
+        Optional name for the variable. Defaults to 'Variable' and gets uniquified automatically.
     Returns
     -------
-        A Variable object.
-
+        Variable
     """
-
-    return flow.nn.Parameter(initial_value, name=name, requires_grad=trainable)
+    return jt.nn.Parameter(data=initial_value, requires_grad=trainable)
 
 
 class MatMul(object):
-    def __init__(self, transpose_a=False, transpose_b=False, name=None):
+
+    def __init__(self, transpose_a=False, transpose_b=False):
         self.transpose_a = transpose_a
         self.transpose_b = transpose_b
-        self.name = name
-        if self.transpose_a or self.transpose_b:
-            raise NotImplementedError('keyword argument `transpose_a` or `transpose_b` is not supported.')
 
-    def __call__(self, x, y):
-        return flow.matmul(x, y)
+    def __call__(self, a, b):
+        return jt.matmul(a, b)
 
 
 def matmul(a, b, transpose_a=False, transpose_b=False):
     """
     Multiplies matrix a by matrix b, producing a * b.
 
-    The inputs must, following any transpositions, be tensors of rank >= 2 where the inner 2 dimensions specify valid matrix multiplication arguments, and any further outer dimensions match.
+    Parameters
+    ----------
+    a : tensor
+         type float16, float32, float64, int32, complex64, complex128 and rank > 1.
+    b : tensor
+        with same type and rank as a.
 
-    Both matrices must be of the same type. The supported types are: float16, float32, float64, int32, complex64, complex128.
-
-    Either matrix can be transposed on the fly by setting one of the corresponding flag to True. This is `False` by default.
-
-    Args:
-        a (Tensor): A Tensor. Must be one of the following types: float16, float32, float64, int32, complex64, complex128.
-        b (Tensor): A Tensor. Must have the same type as a.
-        transpose_a (bool, optional):
-            If True, a is transposed before multiplication. Defaults to False.
-        transpose_b (bool, optional):
-            If True, b is transposed before multiplication. Defaults to False.
-
-    Returns:
-        Tensor: The product of the matrix multiplication. Has the same type as a.
-
+    Returns
+    -------
+        A Tensor of the same type as a and b
     """
-    return flow.matmul(a, b)
+    return jt.matmul(a, b)
 
 
 def add(value, bias):
     """
-    Adds bias to value.
+    Returns x + y element-wise.
 
-    This is a special case of addN where N=1.
+    Parameters
+    ----------
+    value :  tensor.
+        Must be one of the following types: bfloat16, half, float32, float64,
+        uint8, int8, int16, int32, int64, complex64, complex128, string.
+    bias : tensor
+        Must have the same type as a
 
-    Args:
-        value (Tensor): A Tensor. Must be one of the following types: float16, float32, float64, int32, int64, complex64, complex128.
-        bias (Tensor): A Tensor. Must have the same type as value.
-
-    Returns:
-        Tensor: A Tensor. Has the same type as value.
-
+    Returns
+    -------
+        A Tensor. Has the same type as a.
     """
-    return flow.add(value, bias)
+    return jt.add(value, bias)
 
 
 def dtypes(dt):
     """
-    Returns the data type of dt as a DType.
+    Data dtypes.
 
-    Args:
-        dt (Tensor): string
-         It could be 'uint8', 'int8', 'uint16', 'int16', 'int32', 'int64', 'float16', 'float32', 'float64', 'bool', 'char', 'string', 'complex64', 'complex128', 'int32', 'int64', 'int8', 'uint8', 'float16', 'float32', 'float64', 'complex64', 'complex128', 'bfloat16', 'qint8', 'quint8', 'qint32', 'half', 'resource', 'variant', 'uint32', 'uint64', 'double', 'long', 'int', 'short', 'byte', 'float', 'complex'.
+    Parameters
+    ----------
+    dt : string
+         It could be 'uint8', 'uint16', 'uint32', 'uint64', 'int8', 'int16',
+         'int32', 'int64', 'float16', 'float32', 'float64', 'DType'.
 
-    Returns:
-        DType: The data type of dt.
-
+    Returns
+    -------
+        Data dtypes
     """
     if dt not in _dtypeDict.keys():
         raise Exception("Unsupported dtype: {}".format(dt))
@@ -464,73 +345,66 @@ def dtypes(dt):
 
 
 class Maximum(object):
+
     def __init__(self):
         pass
 
-    def forward(self, x, y):
-        return flow.maximum(x, y)
+    def __call__(self, x, y):
+        return jt.maximum(x, y)
 
 
 class Minimum(object):
+
     def __init__(self):
         pass
 
-    def forward(self, x, y):
-        return flow.minimum(x, y)
-
-
-def maximum(x, y):
-    """
-    Returns the max of x and y (i.e. x > y ? x : y) element-wise.
-
-    Args:
-        x (Tensor): A Tensor. Must be one of the following types: float16, float32, float64, int32, int64, complex64, complex128.
-        y (Tensor): A Tensor. Must have the same type as x.
-
-    Returns:
-        Tensor: A Tensor. Has the same type as x.
-
-    """
-    return flow.maximum(x, y)
+    def __call__(self, x, y):
+        return jt.minimum(x, y)
 
 
 def minimum(x, y):
     """
     Returns the min of x and y (i.e. x < y ? x : y) element-wise.
 
-    Args:
-        x (Tensor): A Tensor. Must be one of the following types: float16, float32, float64, int32, int64, complex64, complex128.
-        y (Tensor): A Tensor. Must have the same type as x.
+    Parameters
+    ----------
+    x : tensor.
+        Must be one of the following types: bfloat16, half, float32, float64, int32, int64.
+    y : A Tensor.
+        Must have the same type as x.
 
-    Returns:
-        Tensor: A Tensor. Has the same type as x.
-
-    Examples
-    ---------
-    >>> import tensorlayerx as tlx
-    >>> x = tlx.ops.constant([0., 0., 0., 0.])
-    >>> y = tlx.ops.constant([-5., -2., 0., 3.])
-    >>> z = tlx.ops.minimum(x, y)
-
-
+    Returns
+    -------
+        A Tensor. Has the same type as x
     """
-    return flow.minimum(x, y)
+
+    return jt.minimum(x, y)
 
 
 class FlattenReshape(object):
+
     def __init__(self):
         pass
 
-    def forward(self, x):
-        return flow.reshape(x, (-1,))
+    def __call__(self, inputs):
+        dim = 1
+        for d in get_tensor_shape(inputs)[1:]:
+            dim *= d
+        return jt.reshape(inputs, [-1, dim])
 
 
 class Reshape(object):
+
     def __init__(self, shape):
         self.shape = shape
 
-    def forward(self, x):
-        return flow.reshape(x, self.shape)
+    def __call__(self, tensor):
+        if not self.shape:
+            raise ValueError("The target shape of reshape can't be empty.")
+        if -1 in self.shape and len([s for s in self.shape if s == -1]) > 1:
+            raise ValueError("Only one dimension can be inferred when using -1 in reshape.")
+
+        return jt.reshape(tensor, self.shape)
 
 
 def reshape(tensor, shape):
@@ -548,15 +422,17 @@ def reshape(tensor, shape):
         A Tensor. Has the same type as tensor
     """
 
-    return flow.reshape(tensor, shape)
+    return jt.reshape(tensor, shape)
 
 
 class Concat(object):
+
     def __init__(self, axis=0):
+        super(Concat, self).__init__()
         self.axis = axis
 
-    def forward(self, values):
-        return flow.concat(values, dim=self.axis)
+    def __call__(self, values):
+        return jt.concat(values, dim=self.axis)
 
 
 def concat(values, axis=0):
@@ -574,10 +450,10 @@ def concat(values, axis=0):
         A Tensor resulting from concatenation of the input tensors.
     """
 
-    return flow.concat(values, dim=axis)
+    return jt.concat(values, axis)
 
 
-def convert_to_tensor(value, dtype=None, device=None):
+def convert_to_tensor(value, dtype=None, device = None):
     """
     Converts the given value to a Tensor.
 
@@ -592,23 +468,18 @@ def convert_to_tensor(value, dtype=None, device=None):
     -------
         A Tensor based on value.
     """
-
     if isinstance(dtype, str):
         dtype = _dtypeDict[dtype]
-
-    if device == 'cpu':
-        device = flow.device('cpu')
-    else:
-        device = flow.device('cuda' if flow.cuda.is_available() else 'cpu')
-
-    return flow.tensor(value, dtype=dtype, device=device)
+    if device == 'gpu':
+        jt.flags.use_cuda = 1
+    return jt.array(value, dtype=dtype)
 
 
 def convert_to_numpy(value):
     try:
         return value.numpy()
     except:
-        return value.cpu().numpy()
+        return value.cpu().detach().numpy()
 
 
 def sqrt(x):
@@ -624,8 +495,7 @@ def sqrt(x):
     -------
         A Tensor. Has the same type as x.
     """
-
-    return flow.sqrt(x)
+    return jt.sqrt(x)
 
 
 class ReduceSum(object):
@@ -636,9 +506,10 @@ class ReduceSum(object):
 
     def __call__(self, input):
         if self.axis is not None:
-            return flow.sum(input, dim=self.axis, keepdim=self.keepdims)
+            return jt.sum(input, dim=self.axis)
         else:
-            return flow.sum(input, keepdim=self.keepdims)
+            return jt.sum(input)
+
 
 class ReduceMean(object):
 
@@ -648,9 +519,10 @@ class ReduceMean(object):
 
     def __call__(self, inputs):
         if self.axis is not None:
-            return flow.mean(input=inputs, dim=self.axis, keepdim=self.keepdims)
+            return jt.mean(inputs, self.axis, self.keepdims)
         else:
-            return flow.mean(inputs)
+            return jt.mean(inputs)
+
 
 def reduce_mean(input_tensor, axis=None, keepdims=False):
     """
@@ -670,11 +542,13 @@ def reduce_mean(input_tensor, axis=None, keepdims=False):
     -------
         The reduced tensor.
     """
-
     if axis is not None:
-        return flow.mean(input_tensor, dim=axis, keepdim=keepdims)
+        if isinstance(axis, (tuple, list)):
+            axis = tuple(axis)
+        return jt.mean(input_tensor, dim=axis, keepdims=keepdims)
     else:
-        return flow.mean(input_tensor)
+        return jt.mean(input_tensor)
+
 
 
 class ReduceMax(object):
@@ -688,12 +562,13 @@ class ReduceMax(object):
             if isinstance(self.axis, (list, tuple)):
                 out = inputs
                 for dim in self.axis[::-1]:
-                    out = flow.max(out, dim, keepdim=self.keepdims)
+                    out = jt.max(out, dim=dim, keepdims=self.keepdims)
                 return out
             else:
-                return flow.max(inputs, self.axis, keepdim=self.keepdims)
+                return jt.max(inputs, dim=self.axis, keepdims=self.keepdims)
         else:
-            return flow.max(inputs)
+            return jt.max(inputs)
+
 
 
 def reduce_max(input_tensor, axis=None, keepdims=False):
@@ -716,9 +591,9 @@ def reduce_max(input_tensor, axis=None, keepdims=False):
     """
 
     if axis is not None:
-        return flow.max(input_tensor, dim=axis, keepdim=keepdims)
+        return jt.max(input_tensor, dim=axis, keepdims=keepdims)
     else:
-        return flow.max(input_tensor)
+        return jt.max(input_tensor)
 
 
 def reduce_min(input_tensor, axis=None, keepdims=False):
@@ -741,17 +616,26 @@ def reduce_min(input_tensor, axis=None, keepdims=False):
     """
 
     if axis is not None:
-        return flow.min(input_tensor, dim=axis, keepdim=keepdims)
+        return jt.min(input_tensor, dim=axis, keepdims=keepdims)
     else:
-        return flow.min(input_tensor)
+        return jt.min(input_tensor)
 
 
 class Pad2d(object):
     def __init__(self, padding, mode='constant', value=0.0, data_format="NCHW", name=None):
-        pass
+        self.padding = padding
+        self._mode = mode
+        self._value = value
+        self._data_format = data_format
+        self._name = name
 
     def __call__(self, x):
-        pass
+        if self._data_format == "NHWC":
+            x = nhwc_to_nchw(x)
+        output = jt.nn.functional.pad(x, self.padding, self._mode, value=self._value)
+        if self._data_format == "NHWC":
+            output = nchw_to_nhwc(output)
+        return output
 
 
 class Pad(object):
@@ -767,27 +651,25 @@ class Pad(object):
         if self.mode in ['symmetric', 'reflect']:
             if len(x.shape) == 3 and self.paddings[0:2] + self.paddings[4:] == (0, 0, 0, 0):
                 self.paddings = (self.paddings[2], self.paddings[3])
-                x = flow.transpose(x, 1, 2)
-            elif len(x.shape) == 4 and self.paddings[0:2] + self.paddings[6:] == (0, 0, 0, 0, 0, 0):
-                self.paddings = (self.paddings[2], self.paddings[3], self.paddings[4], self.paddings[5])
-                x = flow.transpose(x, 1, 3)
-            elif len(x.shape) == 5 and self.paddings[0:2] + self.paddings[8:] == (0, 0, 0, 0, 0, 0, 0, 0):
-                self.paddings = (self.paddings[2], self.paddings[3], self.paddings[4],
-                                 self.paddings[5], self.paddings[6], self.paddings[7])
-                x = flow.transpose(x, 1, 4)
+                x = jt.transpose(x, 1, 2)
+            elif len(x.shape) == 4 and self.paddings[0:2] + self.paddings[6:] == (0, 0, 0, 0):
+                self.paddings = (self.paddings[2:6])[::-1]
+                x = jt.transpose(x, 1, 3)
+            elif len(x.shape) == 5 and self.paddings[0:2] + self.paddings[8:] == (0, 0, 0, 0):
+                self.paddings = (self.paddings[2:8])[::-1]
+                x = jt.transpose(x, 1, 4)
             else:
                 raise NotImplementedError("Only constant padding is implemented for arbitrary dimensions.")
 
-        out = flow.pad(x, self.paddings, mode=self.mode, value=self.constant_values)
+        out = jt.nn.pad(x, self.paddings, mode=self.mode, value=self.constant_values)
 
         if self.mode in ['symmetric', 'reflect']:
             if len(x.shape) == 3:
-                out = flow.transpose(out, 1, 2)
-            elif len(x.shape) == 4:
-                out = flow.transpose(out, 1, 3)
-            elif len(x.shape) == 5:
-                out = flow.transpose(out, 1, 4)
-
+                out = jt.transpose(out, 1, 2)
+            if len(x.shape) == 4:
+                out = jt.transpose(out, 1, 3)
+            if len(x.shape) == 5:
+                out = jt.transpose(out, 1, 4)
         return out
 
     def correct_paddings(self, paddings):
@@ -818,7 +700,7 @@ def pad(tensor, paddings, mode='CONSTANT', constant_values=0):
     -------
         A Tensor. Has the same type as tensor.
     """
-    pad_obj = Pad(paddings, mode, constant_values)
+    pad_obj = Pad(paddings, mode, constant_values=constant_values)
     return pad_obj(tensor)
 
 
@@ -830,8 +712,8 @@ class Unstack(object):
 
     def __call__(self, values):
         out = []
-        for o in flow.chunk(values, chunks=self.num, dim=self.axis):
-            out.append(flow.squeeze(o))
+        for o in jt.chunk(values, chunks=self.num, dim=self.axis):
+            out.append(jt.squeeze(o))
         return out
 
 
@@ -841,7 +723,7 @@ class Stack(object):
         self.axis = axis
 
     def __call__(self, values):
-        return flow.stack(values, dim=self.axis)
+        return jt.stack(values, dim=self.axis)
 
 
 def stack(values, axis=0):
@@ -861,7 +743,7 @@ def stack(values, axis=0):
         A stacked Tensor with the same type as values.
     """
 
-    return flow.stack(values, dim=axis)
+    return jt.stack(values, dim=axis)
 
 
 class Meshgrid(object):
@@ -870,8 +752,8 @@ class Meshgrid(object):
         super(Meshgrid, self).__init__()
         self.index = indexing
 
-    def __call__(self, *xi):
-        return flow.meshgrid(xi, indexing=self.index)
+    def __call__(self, *inputs):
+        return jt.meshgrid(*inputs, indexing=self.index)
 
 
 def meshgrid(*args, **kwargs):
@@ -890,7 +772,7 @@ def meshgrid(*args, **kwargs):
         A list of N Tensors with rank N.
     """
 
-    return flow.meshgrid(*args, **kwargs)
+    return jt.meshgrid(*args)
 
 
 def arange(start, limit=None, delta=1, dtype=None):
@@ -915,7 +797,7 @@ def arange(start, limit=None, delta=1, dtype=None):
         An 1-D Tensor of type dtype.
     """
 
-    return flow.arange(start, end=limit, step=delta, dtype=dtype)
+    return jt.arange(start=start, end=limit, step=delta, dtype=dtype)
 
 
 class ExpandDims(object):
@@ -924,7 +806,7 @@ class ExpandDims(object):
         self.axis = axis
 
     def __call__(self, input):
-        return flow.unsqueeze(input, dim=self.axis)
+        return jt.unsqueeze(input, dim=self.axis)
 
 
 def expand_dims(input, axis):
@@ -944,7 +826,7 @@ def expand_dims(input, axis):
         A Tensor with the same data as input, but its shape has an additional dimension of size 1 added.
     """
 
-    return flow.unsqueeze(input, dim=axis)
+    return jt.unsqueeze(input, axis)
 
 
 class Tile(object):
@@ -953,8 +835,19 @@ class Tile(object):
         pass
 
     def __call__(self, input, multiples):
-        return flow.tile(input, multiples)
+        input_shape = list(input.shape)
+        reps = multiples
+        # Ensure reps is the same length as input shape
+        while len(reps) < len(input_shape):
+            reps.insert(0, 1)
 
+        # Repeat the input tensor along each dimension
+        tiled_tensor = input
+        for axis, rep in enumerate(reps):
+            if rep != 1:
+                tiled_tensor = jt.concat([tiled_tensor] * rep, dim=axis)
+
+        return tiled_tensor
 
 def tile(input, multiples):
     """
@@ -972,8 +865,8 @@ def tile(input, multiples):
     -------
         A Tensor. Has the same type as input.
     """
-
-    return flow.tile(input, multiples)
+    tile_op = Tile()
+    return tile_op(input, multiples)
 
 
 class Cast(object):
@@ -982,8 +875,7 @@ class Cast(object):
         self.dtype = dtype
 
     def __call__(self, x):
-
-        return x.type(self.dtype)
+        return x.cast(self.dtype)
 
 
 def cast(x, dtype=None):
@@ -1003,7 +895,8 @@ def cast(x, dtype=None):
         A Tensor or SparseTensor or IndexedSlices with same shape as x and same type as dtype.
     """
 
-    return x.type(dtype)
+    return x.cast(dtype)
+
 
 class Transpose(object):
 
@@ -1017,37 +910,35 @@ class Transpose(object):
 
 def transpose(a, perm=None, conjugate=False):
     """
-    Transposes a.
+    Transposes a tensor.
 
     Parameters
     ----------
-    a : tensor
-        A Tensor.
-    perm : list / int
+    a : jt.Var
+        A Jittor tensor.
+    perm : list / int, optional
         A permutation of the dimensions of a.
-    conjugate : bool
-        Setting it to True is mathematically equivalent to tf.math.conj(tf.transpose(input)).
 
     Returns
     -------
-        A transposed Tensor.
+    jt.Var
+        A transposed Jittor tensor.
     """
-    if perm == None:
-        if len(a.shape) <= 2:
-            return flow.t(a)
-        if len(a.shape) == 3:
-            perm = [2, 1, 0]
-        if len(a.shape) == 4:
-            perm = [3, 2, 1, 0]
-        if len(a.shape) == 5:
-            perm = [4, 3, 2, 1, 0]
+    if not isinstance(a, jt.Var):
+        raise TypeError("Input must be a Jittor tensor.")
 
-    out = flow.permute(a, perm)
+    if perm is None:
+        perm = list(range(len(a.shape)))[::-1]
+    elif not isinstance(perm, jt.NanoVector):
+        perm = jt.NanoVector(perm)
+
+
+    out = jt.transpose(a, perm)
+
     if conjugate:
-        pass  # Not support yet
-
+        raise NotImplementedError("Conjugate transpose is not supported in Jittor.")
+    
     return out
-
 
 def gather_nd(params, indices, batch_dims=0):
     """
@@ -1066,40 +957,22 @@ def gather_nd(params, indices, batch_dims=0):
     -------
         A Tensor. Has the same type as params.
     """
+    raise NotImplementedError
+    # out_shape = indices.shape[:-1]
+    # indices = indices.unsqueeze(0).transpose(0, -1)
+    # ndim = indices.shape[0]
+    # indices = indices.long()
+    # idx = jt.zeros_like(indices[0], device=indices.device).long()
+    # m = 1
 
-    out_shape = indices.shape[:-1]
-    indices = indices.unsqueeze(0).transpose(0, -1)
-    ndim = indices.shape[0]
-    indices = indices.long()
-    idx = flow.zeros_like(indices[0]).long()
-    m = 1
-
-    for i in range(ndim)[::-1]:
-        idx += indices[i] * m
-        m *= params.size(i)
-    out = flow.gather(params, idx, dim=0)
-    return out.reshape(out_shape)
-
+    # for i in range(ndim)[::-1]:
+    #     idx += indices[i] * m
+    #     m *= params.size(i)
+    # out = jt.take(params, idx)
+    # return out.view(out_shape)
 
 def scatter_nd(indices, updates, shape):
-    """
-    Scatter updates into a new (initially zero) tensor according to indices.
-
-    Parameters
-    ----------
-    indices : tensor
-        A tensor of indices into a new tensor of shape shape. Must be one of the following types: int32, int64.
-    updates : tensor
-        A tensor of updated values to scatter into a new tensor. Must have the same type as ref.
-    shape : tensor
-        A 1-D tensor. The shape of the resulting tensor.
-
-    Returns
-    -------
-        A Tensor. Has the same type as updates.
-    """
-
-    return flow.scatter_nd(indices, updates, shape)
+    raise NotImplementedError
 
 
 class ClipGradByValue(object):
@@ -1108,7 +981,8 @@ class ClipGradByValue(object):
         self.max = clip_max
 
     def __call__(self, inputs):
-        flow.nn.utils.clip_grad_value_(inputs, clip_value=self.max)
+        raise NotImplementedError
+        # jt.nn.utils.clip_grad_value_(inputs, clip_value=self.max)
 
 
 class ClipGradByNorm(object):
@@ -1116,16 +990,16 @@ class ClipGradByNorm(object):
         self.clip_norm = clip_norm
 
     def __call__(self, inputs):
-        flow.nn.utils.clip_grad_norm_(inputs, max_norm=self.clip_norm, norm_type=2)
+        raise NotImplementedError
+        # jt.nn.utils.clip_grad_norm_(inputs, max_norm=self.clip_norm, norm_type=2)
 
 
 class ClipByGlobalNorm(object):
-    def __init__(self, clip_norm=0.1):
+    def __init__(self, clip_norm):
         self.clip_norm = clip_norm
 
     def __call__(self, inputs):
         raise NotImplementedError
-
 
 
 def clip_by_value(t, clip_value_min, clip_value_max):
@@ -1174,34 +1048,26 @@ def split(value, num_or_size_splits, axis=0):
     -------
         Tensor objects resulting from splitting value.
     """
-
-    return flow.split(value, num_or_size_splits, dim=axis)
+    if isinstance(num_or_size_splits, int):
+        nums = value.size(axis)
+        if nums % num_or_size_splits != 0:
+            raise ValueError("Expected input_axis_nums % num_or_size_splits == 0, but received input_axis_nums % num_or_size_splits = 0")
+        else:
+            num_or_size_splits = int(nums / num_or_size_splits)
+    return jt.split(value, num_or_size_splits, dim=axis)
 
 
 class Floor(object):
 
     def __call__(self, x):
-        return flow.floor(x)
+        return jt.floor(x)
 
 
 def floor(x):
-    """
-    Returns the floor of a tensor.
-
-    Parameters
-    ----------
-    x : tensor
-        A Tensor or SparseTensor or IndexedSlices of numeric type.
-
-    Returns
-    -------
-        A Tensor or SparseTensor or IndexedSlices with same shape as x and same type as x.
-    """
-
-    return flow.floor(x)
+    return jt.floor(x)
 
 
-def gather(params, indices, axis=None):
+def gather(params, indices, axis = None):
     if axis is None:
         axis = 0
     if axis < 0:
@@ -1213,42 +1079,23 @@ def gather(params, indices, axis=None):
     elif axis == 2:
         return params[:, :, indices]
     elif axis == 3:
-        return params[:, :, :, indices]
+        return params[:,:,:, indices]
 
 
 def linspace(start, stop, num):
-    """
-    Returns evenly spaced numbers over a specified interval.
-
-    Parameters
-    ----------
-    start : tensor
-        The starting value of the sequence.
-    stop : tensor
-        The end value of the sequence, unless endpoint is set to False.
-    num : int
-        Number of samples to generate.
-
-    Returns
-    -------
-        A Tensor of one of the following types: float32, float64, int32, int64.
-    """
-    return flow.linspace(start=start, end=stop, steps=num)
+    return jt.linspace(start=start, end=stop, steps=num)
 
 
 def slice(inputs, starts, sizes):
-    '''
-    Extracts a slice from a tensor.
-    '''
 
     ends = [starts[i] + sizes[i] for i in range(len(starts))]
 
     if len(inputs.shape) == 1:
-        return inputs[starts[0]: ends[0]]
+        return inputs[starts[0] : ends[0]]
     if len(inputs.shape) == 2:
-        return inputs[starts[0]: ends[0], starts[1]:ends[1]]
+        return inputs[starts[0] : ends[0], starts[1]:ends[1]]
     if len(inputs.shape) == 3:
-        return inputs[starts[0]: ends[0], starts[1]:ends[1], starts[2]:ends[2]]
+        return inputs[starts[0] : ends[0], starts[1]:ends[1], starts[2]:ends[2]]
     if len(inputs.shape) == 4:
         return inputs[starts[0]: ends[0], starts[1]:ends[1], starts[2]:ends[2], starts[3]:ends[3]]
     if len(inputs.shape) == 5:
@@ -1273,13 +1120,13 @@ class OneHot(object):
 
     def __call__(self, inputs):
         if [self.on_value, self.off_value] == [None, None]:
-            return F.one_hot(inputs, self.depth)
+            return jt.nn.one_hot(inputs, self.depth)
         else:
-            out = F.one_hot(inputs, self.depth)
-            out = cast(out, flow.float64)
-            out = flow.where(out == 1, self.on_value, out)
-            out = flow.where(out == 0, self.off_value, out)
-            out = cast(out, flow.int)
+            out = jt.nn.one_hot(inputs, self.depth)
+            out = cast(out, jt.float64)
+            out = jt.where(out == 1, self.on_value, out)
+            out = jt.where(out == 0, self.off_value, out)
+            out = cast(out, jt.Var.int64)
             return out
 
 
@@ -1291,7 +1138,8 @@ class L2Normalize(object):
 
     def __call__(self, input, *args, **kwargs):
 
-        return F.normalize(input, p=2, dim=self.axis, eps=self.epsilon)
+        return jt.misc.normalize(input, p = 2, dim=self.axis, eps=self.epsilon)
+
 
 
 class EmbeddingLookup(object):
@@ -1304,20 +1152,19 @@ class EmbeddingLookup(object):
         self.sparse = False
 
     def __call__(self, params, ids):
-        return F.embedding(
-            ids, params, self.padding_idx, self.max_norm, self.norm_type, self.scale_grad_by_freq, self.sparse
-        )
+        Warning("Parameters max_norm, padding_idx, norm_type, scale_grad_by_freq, and sparse are not supported in Jittor backend.")
+        return jt.nn.embedding(
+            ids, params )
 
 
 class NCELoss(object):
-
     def __init__(self, num_true=1, sampled_values=None, remove_accidental_hits=False):
         self.num_true = num_true
         self.sampled_values = sampled_values
         self.remove_accidental_hits = remove_accidental_hits
 
     def __call__(self, weights, biases, labels, inputs, num_sampled, num_classes):
-        raise NotImplementedError
+        raise NotImplementedError("NCELoss is not implemented for the Jittor backend")
 
 
 class NotEqual(object):
@@ -1326,20 +1173,25 @@ class NotEqual(object):
         pass
 
     def __call__(self, x, y):
-        return flow.not_equal(x, y)
+        return jt.Var.not_equal(x, y)
+
 
 
 class CountNonzero(object):
 
-    def __init__(self, keepdims=False, dtype="int64"):
+    def __init__(self, keepdims=None, dtype="float32"):
         self.keepdims = keepdims
+        self.dtype = dtype
 
     def __call__(self, input, axis=None):
-        return flow.nonzero(input, as_tuple=self.keepdims)
+        # Calculate the count of non-zero elements along the specified axis
+        if axis is None:
+            return (input != 0).sum().cast(self.dtype)
+        else:
+            return (input != 0).sum(dim=axis, keepdims=self.keepdims).cast(self.dtype)
 
 
-class Resize:
-
+class Resize(object):
     def __init__(self, scale, method, antialias=False, data_format='channels_last'):
         self.method = method
         self.antialias = antialias
@@ -1349,20 +1201,31 @@ class Resize:
     def __call__(self, inputs):
         if self.data_format == "channels_last":
             inputs = nhwc_to_nchw(inputs)
-        outputs = F.interpolate(inputs, scale_factor=self.scale, mode=self.method, align_corners=self.antialias)
+        
+        # Ensure scale is handled correctly
+        if isinstance(self.scale, (tuple, list)):
+            if len(self.scale) == 1:
+                scale_factor = self.scale[0]
+            else:
+                scale_factor = self.scale
+        else:
+            scale_factor = self.scale
+        
+        # Convert scale_factor to a single value if it's a tuple/list of same values
+        if isinstance(scale_factor, (tuple, list)) and len(set(scale_factor)) == 1:
+            scale_factor = scale_factor[0]
+        
+        outputs = jt.nn.interpolate(inputs, scale_factor=scale_factor, mode=self.method, align_corners=self.antialias)
+        
         if self.data_format == "channels_last":
             outputs = nchw_to_nhwc(outputs)
         return outputs
 
-
 def resize(inputs, output_size, method, antialias):
-    return F.interpolate(inputs, size=output_size, mode=method, align_corners=antialias)
+    return jt.nn.interpolate(inputs, size=output_size, mode=method, align_corners=antialias)
 
 
 class ZeroPadding1D(object):
-    '''
-    Pads the 2nd dimension of a 3D tensor.
-    '''
 
     def __init__(self, padding, data_format):
         if data_format == 'channels_first':
@@ -1378,9 +1241,6 @@ class ZeroPadding1D(object):
 
 
 class ZeroPadding2D(object):
-    '''
-    Pads the 2nd and 3rd dimensions of a 4D tensor.
-    '''
 
     def __init__(self, padding, data_format):
         if data_format == 'channels_first':
@@ -1416,30 +1276,31 @@ class Sign(object):
         pass
 
     def __call__(self, x):
-        return flow.sign(x)
+        return jt.nn.sign(x)
 
 
 class Ceil(object):
 
     def __call__(self, x):
-        return flow.ceil(x)
+        return jt.ceil(x)
 
 
 def ceil(x):
-    return flow.ceil(x)
+    return jt.ceil(x)
 
 
 def multiply(x, y):
-    return flow.mul(x, y)
+    return jt.multiply(x, y)
 
 
 def divide(x, y):
-    return flow.div(x, y)
+    return jt.divide(x, y)
 
 
 def identity(x):
 
     raise NotImplementedError
+
 
 class BatchToSpace(object):
 
@@ -1450,271 +1311,248 @@ class BatchToSpace(object):
     def __call__(self, input_x):
         raise NotImplementedError
 
+
 class DepthToSpace(object):
 
     def __init__(self, block_size, data_format):
         self.block_size = block_size
         self.data_format = data_format
-        self.pixel_shuffle = nn.PixelShuffle(self.block_size)
 
     def __call__(self, input):
         if self.data_format == 'channels_last':
             input = nhwc_to_nchw(input)
-        output = self.pixel_shuffle(input)
-
+        output = jt.nn.functional.pixel_shuffle(input, upscale_factor=self.block_size)
         if self.data_format == 'channels_last':
             output = nchw_to_nhwc(output)
         return output
 
-
 def triu(data, diagonal=0):
 
-    return flow.triu(data, diagonal=diagonal)
+    return jt.triu(data, diagonal)
 
 
 def tril(data, diagonal=0):
 
-    return flow.tril(data, diagonal=diagonal)
+    return jt.tril(data, diagonal)
 
 
 def abs(x):
-    return flow.abs(x)
+    return jt.abs(x)
 
 
 def acos(x):
-    return flow.acos(x)
+    return jt.acos(x)
 
 
 def acosh(x):
-    return flow.acosh(x)
+    return jt.acosh(x)
 
 
 def angle(x):
-    x_np = convert_to_numpy(x)
-    return convert_to_tensor(np.angle(x_np))
+    raise NotImplementedError
+    # return jt.angle(x)
 
 
 def argmax(x, axis=None, keepdim=False, dtype='int64'):
-    """
-    Returns the index with the largest value across axes of a tensor.
+    return jt.argmax(x, dim=axis, keepdims=keepdim)
 
-    Parameters
-    ----------
-    x : tensor
-        A Tensor
-    axis : int
-        An integer, the axis to reduce across. Default to 0.
-    dtype : tensor or str
-        An optional output dtype (nt32 or int64). Defaults to int64.
-
-    Returns
-    -------
-        A Tensor of type output_type.
-
-    Examples
-    ---------
-    >>> import tensorlayerx as tlx
-    >>> x = tlx.ops.constant(value=[10, 20, 5, 6, 15])
-    >>> y = tlx.ops.argmax(x)
-
-    """
-
-    return flow.argmax(x, axis=axis, dtype=dtype)
 
 def argmin(x, axis=None, dtype='int64'):
-    return flow.argmin(x, dim=axis)
+    return jt.argmin(x, dim=axis)
 
 
 def asin(x):
-    """
-    Returns the index with the smallest value across axes of a tensor.
-
-    Parameters
-    ----------
-    x : tensor
-        Must be one of the following types: bfloat16, half, float32, float64, int8, int16, int32, int64, complex64, complex128.
-
-    Returns
-    -------
-        A Tensor. Has the same type as x.
-
-    Examples
-    ---------
-    >>> import tensorlayerx as tlx
-    >>> x = tlx.ops.constant(value=[10, 20, 5, 6, 15])
-    >>> y = tlx.ops.asin(x)
-
-    """
-
-    return flow.asin(x)
-
-# Warps of oneflow functions: asin, asinh, atan, atanh, cos, cosh
+    return jt.asin(x)
 
 
 def asinh(x):
-    return flow.asinh(x)
+    return jt.asinh(x)
 
 
 def atan(x):
-    return flow.atan(x)
+    return jt.atan(x)
 
 
 def atanh(x):
-    return flow.atanh(x)
+    return jt.atanh(x)
 
 
 def cos(x):
-    return flow.cos(x)
+    return jt.cos(x)
 
 
 def cosh(x):
-    return flow.cosh(x)
+    return jt.cosh(x)
 
 
 def count_nonzero(x, axis=None, keepdims=None, dtype="int64"):
-    _nonzero = flow.nonzero(x, as_tuple=True)
-    if axis == None:
-        return flow.prod(flow.shape(_nonzero[0]))
-    x_n = convert_to_numpy(x)
-    if isinstance(axis, list):
-        axis = tuple(axis)
-    non_zero = np.count_nonzero(x_n, axis=axis)
-    return convert_to_tensor(non_zero)
+    raise NotImplementedError
+    # return jt.count_nonzero(x, dim=axis)
 
 
-def cumprod(x, axis=0, dtype=None, out=None):
-    return flow.cumprod(x, dim=axis)
+def cumprod(x, axis=0, exclusive=False, reverse=False):
+    return jt.cumprod(x, dim=axis)
 
 
-def cumsum(x, axis=0, dtype=None, out=None):
-    return flow.cumsum(x, dim=axis)
+def cumsum(x, axis=0, exclusive=False, reverse=False):
+    return jt.cumsum(x, dim=axis)
+
 
 def equal(x, y):
-    return flow.equal(x, y)
+    return jt.equal(x, y)
+
 
 def exp(x):
-    return flow.exp(x)
+    return jt.exp(x)
+
 
 def floordiv(x, y):
-    return flow.floor_divide(x, y)
+    return jt.floor_divide(x, y)
+
 
 def floormod(x, y):
-    raise NotImplementedError("floormod is not implemented in oneflow")
+    raise NotImplementedError
+    # return jt.fmod(x, y)
+
 
 def greater(x, y):
-    return flow.greater(x, y)
+    return jt.greater(x, y)
+
 
 def greater_equal(x, y):
-    return flow.greater_equal(x, y)
+    return jt.greater_equal(x, y)
 
 
 def is_inf(x):
-    return flow.isinf(x)
+    return jt.isinf(x)
+
 
 def is_nan(x):
-    return flow.isnan(x)
+    return jt.isnan(x)
+
 
 def l2_normalize(x, axis=None, eps=1e-12):
     axis = 0 if axis is None else axis
-    return F.normalize(x, p=2.0, dim=axis, eps=eps)
+    return jt.misc.normalize(x, p=2.0, dim=axis, eps=eps)
+
 
 def less(x, y):
-    return flow.lt(x, y)
+    return jt.less(x, y)
+
 
 def less_equal(x, y):
-    return flow.le(x, y)
+    return jt.less_equal(x, y)
+
 
 def log(x):
-    return flow.log(x)
+    return jt.log(x)
+
 
 def log_sigmoid(x):
-    return flow.log(1 / (1 + flow.exp(-x)))
+    return jt.log(1 / (1 + jt.exp(-x)))
+
+
+def maximum(x, y):
+    return jt.maximum(x, y)
+
 
 def negative(x):
-    return flow.negative(x)
+    return jt.negative(x)
+
 
 def not_equal(x, y):
-    return flow.not_equal(x, y)
+    return jt.not_equal(x, y)
+
 
 def pow(x, y):
-    return flow.pow(x, y)
+    return jt.pow(x, y)
+
 
 def real(x):
-    raise NotImplementedError("real is not implemented in oneflow")
+    return x
+
 
 def reciprocal(x):
-    return flow.reciprocal(x)
+    return 1/x
+
 
 def reduce_prod(x, axis=None, keepdims=False):
     if axis is not None:
-        return flow.prod(x, dim=axis, keepdim=keepdims)
+        return jt.prod(x, dim=axis, keepdim=keepdims)
     else:
-        return flow.prod(x)
+        return jt.prod(x)
 
 def reduce_std(x, axis=None, keepdims=False):
     if axis is not None:
-        return flow.std(x, dim=axis, keepdim=keepdims)
+        return jt.std(x, dim=axis, keepdim=keepdims)
     else:
-        return flow.std(x)
+        return jt.std(x)
 
 def reduce_sum(x, axis=None, keepdims=False):
     if axis is not None:
-        return flow.sum(x, dim=axis, keepdim=keepdims)
+        return jt.sum(x, dim=axis, keepdim=keepdims)
     else:
-        return flow.sum(x)
+        return jt.sum(x)
+
 
 def reduce_variance(x, axis=None, keepdims=False):
     if axis is not None:
-        return flow.var(x, dim=axis, keepdim=keepdims)
+        return jt.var(x, dim=axis, keepdim=keepdims)
     else:
-        return flow.var(x)
+        return jt.var(x)
+
 
 def round(x):
-    return flow.round(x)
+    return jt.round(x)
+
 
 def rsqrt(x):
-    return flow.rsqrt(x)
+    return jt.rsqrt(x)
 
 
-def segment_max(x, segment_ids, num_segments=None):
-    segment_ids = flow.Tensor(segment_ids, dtype=flow.int64)
-    num_segments = len(flow.unique(segment_ids))
-
+def segment_max(x, segment_ids):
+    segment_ids = jt.array(segment_ids, dtype=jt.int64)
+    num_segments = len(jt.unique(segment_ids))
     return unsorted_segment_max(x, segment_ids, num_segments)
 
 
 def segment_mean(x, segment_ids):
-    segment_ids = flow.Tensor(segment_ids, dtype=flow.int64)
-    num_segments = len(np.unique(segment_ids.numpy()))
+    segment_ids = jt.array(segment_ids, dtype=jt.int64)
+    num_segments = len(jt.unique(segment_ids))
     return unsorted_segment_mean(x, segment_ids, num_segments)
 
 
 def segment_min(x, segment_ids):
-    segment_ids = flow.Tensor(segment_ids, dtype=flow.int64)
-    num_segments = len(np.unique(segment_ids.numpy()))
+    segment_ids = jt.array(segment_ids, dtype=jt.int64)
+    num_segments = len(jt.unique(segment_ids))
     return unsorted_segment_min(x, segment_ids, num_segments)
-
-
-def segment_sum(x, segment_ids):
-    segment_ids = flow.tensor(segment_ids, dtype=flow.int64)
-    num_segments = len(flow.unique(segment_ids))
-    return unsorted_segment_sum(x, segment_ids, num_segments)
 
 
 def segment_prod(x, segment_ids):
     raise NotImplementedError
 
+
+def segment_sum(x, segment_ids):
+    segment_ids = jt.array(segment_ids, dtype=jt.int64)
+    num_segments = len(jt.unique(segment_ids))
+    return unsorted_segment_sum(x, segment_ids, num_segments)
+
+
 def sigmoid(x):
-    return flow.sigmoid(x)
+    return jt.sigmoid(x)
+
 
 def sign(x):
-    return flow.sign(x)
+    return jt.nn.sign(x)
+
 
 def sin(x):
-    return flow.sin(x)
+    return jt.sin(x)
+
 
 def sinh(x):
-    return flow.sinh(x)
+    return jt.sinh(x)
+
 
 def softplus(x):
     """
@@ -1731,19 +1569,24 @@ def softplus(x):
     """
 
     # Computes softplus: (1/b) * log(1 + exp(features*b)) ; b=1
-    return flow.log(1 + flow.exp(x))
+    return jt.nn.softplus(x)
+
 
 def square(x):
-    return flow.square(x)
+    return jt.sqr(x)
+
 
 def squared_difference(x, y):
-    return flow.square(x - y)
+    return jt.sqr(x-y)
+
 
 def subtract(x, y):
-    return flow.sub(x, y)
+    return jt.subtract(x, y)
+
 
 def tan(x):
-    return flow.tan(x)
+    return jt.tan(x)
+
 
 def tanh(x):
     """
@@ -1759,122 +1602,151 @@ def tanh(x):
         A Tensor. Has the same type as x.
     """
 
-    return flow.tanh(x)
+    return jt.tanh(x)
+
 
 def any(x, axis=None, keepdims=False):
     if axis is not None:
-        return flow.any(x, dim=axis, keepdim=keepdims)
+        return jt.any(x, dim=axis, keepdim=keepdims)
     else:
-        return flow.any(x)
+        return jt.any(x)
 
 def all(x, axis=None, keepdims=False):
     if axis is not None:
-        return flow.all(x, dim=axis, keepdim=keepdims)
+        return jt.all(x, dim=axis, keepdim=keepdims)
     else:
-        return flow.all(x)
+        return jt.all(x)
+
 
 def logical_and(x, y):
-    return flow.logical_and(x, y)
+    return jt.logical_and(x, y)
+
 
 def logical_or(x, y):
-    return flow.logical_or(x, y)
+    return jt.logical_or(x, y)
+
 
 def logical_not(x):
-    return flow.logical_not(x)
+    return jt.logical_not(x)
+
 
 def logical_xor(x, y):
-    return flow.logical_xor(x, y)
+    return jt.logical_xor(x, y)
+
 
 def argsort(x, axis=-1, descending=False):
-    return flow.argsort(x, dim=axis, descending=descending)
+    return jt.argsort(x, dim=axis, descending=descending)
+
 
 def bmm(x, y):
-    return flow.bmm(x, y)
+    return jt.bmm(x, y)
+
 
 def where(condition, x, y):
-    return flow.where(condition, x, y)
+    return jt.where(condition,x, y)
 
-def ones_like(x, dtype=None):
-    return flow.ones_like(x, dtype=dtype)
+
+def ones_like(x):
+    return jt.ones_like(x)
+
 
 def zeros_like(x, dtype=None):
-    return flow.zeros_like(x, dtype=dtype)
+    return jt.zeros_like(x, dtype=dtype)
+
 
 def squeeze(x, axis=None):
-    return flow.squeeze(x, dim=axis)
-
-def unsorted_segment_mean(x, segment_ids, num_segments):
-
-    segment_ids = flow.Tensor(segment_ids, dtype=flow.int64)
-    assert x.shape[0] == segment_ids.shape[0], "the length of segment_ids should be equal to data.shape[0]."
-    if len(segment_ids.shape) == 1:
-        s=flow.prod(flow.Tensor(x.shape[1:])).to(flow.int32)
-        segment_ids = segment_ids.repeat_interleave(s).view(segment_ids.shape[0], *x.shape[1:])
-
-    assert x.shape == segment_ids.shape, "data.shape and segment_ids.shape should be equal"
-
-    shape = [num_segments] + list(x.shape[1:])
-    ones_data = flow.ones_like(x,dtype=x.dtype)
-    tensor =  flow.scatter_add(flow.zeros(*shape).to(x.dtype),0,segment_ids, x)
-    tensor_nums = flow.scatter_add(flow.zeros(*shape).to(x.dtype),0,segment_ids, ones_data)
-    tensor = tensor / tensor_nums
-    return tensor
+    return jt.squeeze(x, dim=axis)
 
 
 def unsorted_segment_sum(x, segment_ids, num_segments):
 
-    segment_ids = flow.tensor(segment_ids, dtype=flow.int64)
+    segment_ids = jt.array(segment_ids, dtype=jt.int64)
     assert x.shape[0] == segment_ids.shape[0], "the length of segment_ids should be equal to data.shape[0]."
     if len(segment_ids.shape) == 1:
-        s = flow.prod(flow.tensor(x.shape[1:])).to(flow.int32)
+        s = jt.prod(jt.array(x.shape[1:])).to(jt.int32)
         segment_ids = segment_ids.repeat_interleave(s).view(segment_ids.shape[0], *x.shape[1:])
 
     assert x.shape == segment_ids.shape, "data.shape and segment_ids.shape should be equal"
 
     shape = [num_segments] + list(x.shape[1:])
-    tensor = flow.zeros(*shape).to(x.dtype).scatter_add(0, segment_ids, x)
+    tensor = jt.zeros(*shape).to(x.dtype).scatter_add(0, segment_ids, x)
     return tensor
+
+
+def unsorted_segment_mean(x, segment_ids, num_segments):
+
+    segment_ids = jt.array(segment_ids, dtype=jt.int64)
+    assert x.shape[0] == segment_ids.shape[0], "the length of segment_ids should be equal to data.shape[0]."
+    res = []
+    for i in range(num_segments):
+        mask_index = segment_ids == i
+        if jt.any(mask_index):
+            a = jt.mean(x[mask_index], 0)
+            res.append(a)
+        else:
+            a = jt.zeros_like(x[0])
+            res.append(a)
+    if res[0].shape == [1]:
+        return jt.concat(res, 0)
+    else:
+        return jt.stack(res, 0)
+
+def unsorted_segment_min(x, segment_ids, num_segments):
+
+    segment_ids = jt.array(segment_ids, dtype=jt.int64)
+    assert x.shape[0] == segment_ids.shape[0], "the length of segment_ids should be equal to data.shape[0]."
+    res = []
+    for i in range(num_segments):
+        mask_index = segment_ids == i
+        if jt.any(mask_index):
+            res.append(jt.min(x[mask_index], 0)[0])
+        else:
+            a = jt.zeros_like(x[0])
+            a.fill_(jt.array(float('inf')).to(a.dtype))
+            res.append(a)
+    if res[0].shape == [1]:
+        return jt.concat(res, 0)
+    else:
+        return jt.stack(res, 0)
 
 
 def unsorted_segment_max(x, segment_ids, num_segments):
 
-    segment_ids = flow.Tensor(segment_ids, dtype=flow.int64)
-
+    segment_ids = jt.array(segment_ids, dtype=jt.int64)
     assert x.shape[0] == segment_ids.shape[0], "the length of segment_ids should be equal to data.shape[0]."
     res = []
     for i in range(num_segments):
-        res.append(flow.max(x[segment_ids == i], dim=0)[0])
-    return flow.stack(res, dim=0)
-
-
-def unsorted_segment_min(x, segment_ids, num_segments):
-
-    segment_ids = flow.Tensor(segment_ids, dtype=flow.int64)
-
-    assert x.shape[0] == segment_ids.shape[0], "the length of segment_ids should be equal to data.shape[0]."
-    res = []
-    for i in range(num_segments):
-        res.append(flow.min(x[segment_ids == i], dim=0)[0])
-    return flow.stack(res, dim=0)
+        mask_index = segment_ids == i
+        if jt.any(mask_index):
+            res.append(jt.max(x[mask_index], 0)[0])
+        else:
+            a = jt.zeros_like(x[0])
+            a.fill_(jt.array(float('-inf')).to(a.dtype))
+            res.append(a)
+    if res[0].shape == [1]:
+        return jt.concat(res, 0)
+    else:
+        return jt.stack(res, 0)
 
 def set_seed(seed):
-    flow.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
 
-def is_tensor(obj):
-    return isinstance(obj, flow.Tensor)
+    jt.misc.set_global_seed(seed)
+
+def is_tensor(x):
+
+    return isinstance(x, jt.Var)
 
 def tensor_scatter_nd_update(tensor, indices, updates):
-    tensor = flow.Tensor(tensor)
-    indices = flow.Tensor(indices, dtype=flow.int64)
-    updates = flow.Tensor(updates)
-    indices = flow.flatten(indices)
+    tensor = jt.array(tensor)
+    indices = jt.array(indices, dtype=jt.long)
+    updates = jt.array(updates)
+    indices = jt.flatten(indices)
     tensor[indices] = updates
     return tensor
 
 def diag(input, diagonal=0):
-    return flow.diag(input, diagonal=diagonal)
+
+    return jt.diag(input, diagonal)
 
 def mask_select(x, mask, axis = 0):
     if axis is None:
@@ -1882,7 +1754,8 @@ def mask_select(x, mask, axis = 0):
     if axis < 0:
         axis = len(x.shape) + axis
     if x.shape == mask.shape:
-        return flow.masked_select(x, mask)
+        raise NotImplementedError
+        # return jt.masked_select(x, mask)
     if axis == 0:
         return x[mask]
     elif axis == 1:
@@ -1892,67 +1765,84 @@ def mask_select(x, mask, axis = 0):
     elif axis == 3:
         return x[:,:,:, mask]
 
-def eye(n, m=None, dtype=flow.float32):
+def eye(n, m=None, dtype="float32"):
     if m is None:
         m = n
-    return flow.eye(n, m, dtype=dtype)
+    return jt.init.eye((n,m), dtype=dtype)
+
 
 def einsum(equation, *operands):
-    return flow.einsum(equation, *operands)
+    return jt.linalg.einsum(equation, *operands)
+
 
 class Einsum(object):
     def __init__(self, equation):
         super(Einsum, self).__init__()
         self.equation = equation
 
-    def __call__(self, *operands):
-        return einsum(self.equation, *operands)
+    def __call__(self, *args):
+        return jt.linalg.einsum(self.equation, *args)
 
 def set_device(device = 'GPU', id = 0):
     if device == 'GPU':
-        flow.set_default_dtype(flow.float32)
-        flow.cuda.set_device(id)
+        jt.flags.use_cuda = 1
 
 def distributed_init(backend="cncl"):
-    raise NotImplementedError("Distributed for this backend is not supported")
+    raise NotImplementedError
+    # jt.distributed.init_process_group(backend=backend)
 
 def distributed_model(module, device_ids=None, output_device=None, 
                     dim=0, broadcast_buffers=True, process_group=None, bucket_cap_mb=25, 
                     find_unused_parameters=False, check_reduction=False, gradient_as_bucket_view=False):
-    raise NotImplementedError("Distributed for this backend is not supported")
-
+    return NotImplementedError
+    # return jt.nn.parallel.DistributedDataParallel(module, device_ids=device_ids,
+    #                                                  output_device=output_device,
+    #                                                  dim=dim, broadcast_buffers=broadcast_buffers,
+    #                                                  process_group=process_group, bucket_cap_mb=bucket_cap_mb,
+    #                                                  find_unused_parameters=find_unused_parameters,
+    #                                                  check_reduction=check_reduction, 
+    #                                                  gradient_as_bucket_view=gradient_as_bucket_view)
 
 def scatter_update(tensor, indices, updates):
-    tensor = flow.Tensor(tensor)
-    indices = flow.Tensor(indices, dtype=flow.int64)
-    updates = flow.Tensor(updates)
+    tensor = jt.array(tensor)
+    indices = jt.array(indices, dtype=jt.long)
+    updates = jt.array(updates)
     tensor[indices] = updates
     return tensor
 
 def get_device():
-    try:
-        id = flow.cuda.current_device()
-        device = 'GPU:' + str(id)
-        return device
-    except:
+    flag_gpu = jt.flags.use_cuda 
+    if flag_gpu:
+        id = 0
+        device = 'GPU:' + str(id)    
+    else:
         device = 'CPU'
-        return device
+        
+    return device
 
 def to_device(tensor, device='GPU', id=0):
     device = device.lower()
     if device == 'gpu':
-        device = 'cuda' + ':' + str(id)
-    tensor = tensor.detach().to(device)
+        jt.flags.use_cuda = 1
     return tensor
 
 def roll(input, shifts, dims=None):
 
-    return flow.roll(input, shifts, dims)
+    return jt.roll(input, shifts, dims)
 
 
 def logsoftmax(input, dim=None):
 
-    return F.log_softmax(input, dim)
+    return jt.nn.log_softmax(input, dim)
+
+def topk(input, k, dim=-1, largest=True, sorted=True):
+
+    return jt.topk(input, k, dim, largest, sorted)
+
+def numel(input):
+
+    return jt.size(input)
+
 
 
 def histogram(input, bins=100, min=0, max=0, name=None):
@@ -1989,16 +1879,7 @@ class Swish(object):
     def __call__(self, x):
         raise NotImplementedError
 
-def topk(input, k, dim=-1, largest=True, sorted=True):
-
-    return flow.topk(input, k, dim, largest, sorted)
-
-def numel(input):
-
-    return flow.numel(input)
-
 def expand(x, shape):
-
 
     raise NotImplementedError
 
@@ -2009,9 +1890,10 @@ def unique(x, return_index=False, return_inverse=False, return_counts=False, axi
 
 def flip(x, axis):
 
-    raise NotImplementedError
+    return jt.flip(x, axis)
 
 
 def mv(x, vec):
 
-    raise NotImplementedError
+    return jt.matmul(x, vec)
+

@@ -39,6 +39,8 @@ backend_v = {
     'mindspore': '1.8.1',
     'paddle': '2.2.0',
     'torch': '1.10.0',
+    'jittor': '1.3.8.5',
+    'oneflow':'0.9.0'
 }
 
 if BACKEND_VERSION != backend_v[BACKEND]:
