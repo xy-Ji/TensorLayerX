@@ -1,16 +1,11 @@
 #! /usr/bin/python
 # -*- coding: utf-8 -*-
 
-
-
-################################ TensorLayerX and Torch can be mixed programming. #################################
-
 import os
 # os.environ['TL_BACKEND'] = 'paddle'
 # os.environ['TL_BACKEND'] = 'tensorflow'
 # os.environ['TL_BACKEND'] = 'mindspore'
 os.environ['TL_BACKEND'] = 'torch'
-
 
 import time
 from tensorlayerx.dataflow import Dataset, DataLoader
@@ -167,118 +162,6 @@ for epoch in range(n_epoch):
         print("Epoch {} of {} took {}".format(epoch + 1, n_epoch, time.time() - start_time))
         print("   train loss: {}".format(train_loss / n_iter))
         print("   train acc:  {}".format(train_acc / n_iter))
-
-
-################################ TensorLayerX and Jittor can be mixed programming. #################################
-
-
-# import os
-# import time
-# import numpy as np
-# import tensorlayerx as tlx
-# from tensorlayerx.dataflow import Dataset, DataLoader
-# from tensorlayerx.vision.transforms import (
-#     Compose, Resize, RandomFlipHorizontal, RandomContrast, RandomBrightness, StandardizePerImage, RandomCrop
-# )
-# from tensorlayerx.nn import Conv2d, Linear, Flatten, Module
-# from tensorlayerx.optimizers import Adam
-# from tqdm import tqdm
-
-# # Enable debug logging
-# tlx.logging.set_verbosity(tlx.logging.DEBUG)
-
-# os.environ['TL_BACKEND'] = 'jittor'
-
-
-
-# # Download and prepare the CIFAR10 dataset with progress bar
-# print("Downloading CIFAR10 dataset...")
-# X_train, y_train, X_test, y_test = tlx.files.load_cifar10_dataset(shape=(-1, 32, 32, 3), plotable=False)
-
-# # Define the CIFAR10 dataset
-# class CIFAR10Dataset(Dataset):
-#     def __init__(self, data, label, transforms):
-#         self.data = data
-#         self.label = label
-#         self.transforms = transforms
-
-#     def __getitem__(self, idx):
-#         x = self.data[idx].astype('uint8')
-#         y = self.label[idx].astype('int64')
-#         x = self.transforms(x)
-#         return x, y
-
-#     def __len__(self):
-#         return len(self.label)
-
-# # Define the CIFAR10 images preprocessing pipeline
-# train_transforms = Compose([
-#     RandomCrop(size=[24, 24]),
-#     RandomFlipHorizontal(),
-#     RandomBrightness(brightness_factor=(0.5, 1.5)),
-#     RandomContrast(contrast_factor=(0.5, 1.5)),
-#     StandardizePerImage()
-# ])
-
-# test_transforms = Compose([Resize(size=(24, 24)), StandardizePerImage()])
-
-# # Create DataLoaders for training and testing
-# print("Processing CIFAR10 dataset...")
-# train_dataset = CIFAR10Dataset(data=X_train, label=y_train, transforms=train_transforms)
-# test_dataset = CIFAR10Dataset(data=X_test, label=y_test, transforms=test_transforms)
-
-# train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True)
-# test_dataloader = DataLoader(test_dataset, batch_size=128)
-
-# # Define a simple CNN model
-# class SimpleCNN(Module):
-#     def __init__(self):
-#         super(SimpleCNN, self).__init__()
-#         self.conv1 = Conv2d(16, (3, 3), (1, 1), padding='SAME', act=tlx.nn.ReLU, in_channels=3)
-#         self.flatten = Flatten()
-#         self.fc1 = Linear(out_features=64, act=tlx.nn.ReLU, in_features=16 * 24 * 24)
-#         self.fc2 = Linear(out_features=10, act=None, in_features=64)
-
-#     def forward(self, x):
-#         z = self.conv1(x)
-#         z = self.flatten(z)
-#         z = self.fc1(z)
-#         z = self.fc2(z)
-#         return z
-
-# # Instantiate the model
-# model = SimpleCNN()
-
-# # Define the optimizer
-# optimizer = Adam(model.trainable_weights, lr=0.001)
-
-# # Define the loss function
-# loss_fn = tlx.losses.softmax_cross_entropy_with_logits
-
-# # Training loop
-# n_epoch = 2
-# for epoch in range(n_epoch):
-#     start_time = time.time()
-#     model.set_train()
-#     train_loss, n_iter = 0, 0
-
-#     with tqdm(total=len(train_dataloader), desc=f"Epoch {epoch + 1}/{n_epoch}", unit="batch") as pbar:
-#         for X_batch, y_batch in train_dataloader:
-#             X_batch = tlx.convert_to_tensor(X_batch)
-#             y_batch = tlx.convert_to_tensor(y_batch)
-#             _logits = model(X_batch)
-#             loss = loss_fn(_logits, y_batch)
-            
-#             optimizer.zero_grad()
-#             optimizer.step(loss)
-            
-#             train_loss += loss.item()
-#             n_iter += 1
-#             pbar.update(1)
-
-#     print(f"Epoch {epoch + 1} of {n_epoch} took {time.time() - start_time:.2f}s")
-#     print(f"   train loss: {train_loss / n_iter:.4f}")
-
 
 
 ################################ TensorLayerX and TensorFlow can be mixed programming. #################################
@@ -614,7 +497,7 @@ for epoch in range(n_epoch):
 ################################### TensorLayerX and Paddle can be mixed programming. ##################################
 # import os
 # os.environ['TL_BACKEND'] = 'paddle'
-
+#
 # import time
 # import paddle as pd
 # from tensorlayerx.nn import Module
@@ -626,35 +509,35 @@ for epoch in range(n_epoch):
 # )
 # # enable debug logging
 # tlx.logging.set_verbosity(tlx.logging.DEBUG)
-
+#
 # # prepare cifar10 data
 # X_train, y_train, X_test, y_test = tlx.files.load_cifar10_dataset(shape=(-1, 32, 32, 3), plotable=False)
-
-
+#
+#
 # class CNN(Module):
-
+#
 #     def __init__(self):
 #         super(CNN, self).__init__()
 #         # weights init
 #         W_init = tlx.nn.initializers.truncated_normal(stddev=5e-2)
 #         W_init2 = tlx.nn.initializers.truncated_normal(stddev=0.04)
 #         b_init2 = tlx.nn.initializers.constant(value=0.1)
-
+#
 #         self.conv1 = Conv2d(64, (5, 5), (1, 1), padding='SAME', W_init=W_init, b_init=None, name='conv1', in_channels=3)
 #         self.bn1 = BatchNorm2d(num_features=64, act=tlx.nn.ReLU)
 #         self.maxpool1 = MaxPool2d((3, 3), (2, 2), padding='SAME', name='pool1')
-
+#
 #         self.conv2 = Conv2d(
 #             64, (5, 5), (1, 1), padding='SAME', W_init=W_init, b_init=None, name='conv2', in_channels=64
 #         )
 #         self.bn2 = BatchNorm2d(num_features=64, act=tlx.nn.ReLU)
 #         self.maxpool2 = MaxPool2d((3, 3), (2, 2), padding='SAME', name='pool2')
-
+#
 #         self.flatten = Flatten(name='flatten')
 #         self.linear1 = Linear(384, act=tlx.nn.ReLU, W_init=W_init2, b_init=b_init2, name='linear1relu', in_channels=2304)
 #         self.linear2 = Linear(192, act=tlx.nn.ReLU, W_init=W_init2, b_init=b_init2, name='linear2relu', in_channels=384)
 #         self.linear3 = Linear(10, act=None, W_init=W_init2, name='output', in_channels=192)
-
+#
 #     def forward(self, x):
 #         z = self.conv1(x)
 #         z = self.bn1(z)
@@ -667,11 +550,11 @@ for epoch in range(n_epoch):
 #         z = self.linear2(z)
 #         z = self.linear3(z)
 #         return z
-
-
+#
+#
 # # get the network
 # net = CNN()
-
+#
 # # training settings
 # batch_size = 128
 # n_epoch = 500
@@ -679,31 +562,31 @@ for epoch in range(n_epoch):
 # print_freq = 5
 # shuffle_buffer_size = 128
 # metrics = tlx.metrics.Accuracy()
-
+#
 # train_weights = net.trainable_weights
 # optimizer = tlx.optimizers.Adam(learning_rate)
 # # looking for decay learning rate? see https://github.com/tensorlayer/srgan/blob/master/train.py
-
-
+#
+#
 # class make_dataset(Dataset):
-
+#
 #     def __init__(self, data, label, transforms):
 #         self.data = data
 #         self.label = label
 #         self.transforms = transforms
-
+#
 #     def __getitem__(self, idx):
 #         x = self.data[idx].astype('uint8')
 #         y = self.label[idx].astype('int64')
 #         x = self.transforms(x)
-
+#
 #         return x, y
-
+#
 #     def __len__(self):
-
+#
 #         return len(self.label)
-
-
+#
+#
 # train_transforms = Compose(
 #     [
 #         RandomCrop(size=[24, 24]),
@@ -713,15 +596,15 @@ for epoch in range(n_epoch):
 #         StandardizePerImage()
 #     ]
 # )
-
+#
 # test_transforms = Compose([Resize(size=(24, 24)), StandardizePerImage()])
-
+#
 # train_dataset = make_dataset(data=X_train, label=y_train, transforms=train_transforms)
 # test_dataset = make_dataset(data=X_test, label=y_test, transforms=test_transforms)
-
+#
 # train_dataset = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 # test_dataset = DataLoader(test_dataset, batch_size=batch_size)
-
+#
 # for epoch in range(n_epoch):
 #     train_loss, train_acc, n_iter = 0, 0, 0
 #     start_time = time.time()
@@ -732,15 +615,15 @@ for epoch in range(n_epoch):
 #         loss_ce = loss.numpy()
 #         grads = optimizer.gradient(loss, train_weights)
 #         optimizer.apply_gradients(zip(grads, train_weights))
-
+#
 #         train_loss += loss_ce
-
+#
 #         if metrics:
 #             metrics.update(output, y_batch)
 #             train_acc += metrics.result()
 #             metrics.reset()
 #         n_iter += 1
-
+#
 #         print("Epoch {} of {} took {}".format(epoch + 1, n_epoch, time.time() - start_time))
 #         print("   train loss: {}".format(train_loss / n_iter))
 #         print("   train acc:  {}".format(train_acc / n_iter))
